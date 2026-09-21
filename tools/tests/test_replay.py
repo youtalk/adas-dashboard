@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import json
 import pathlib
@@ -73,6 +74,32 @@ def test_loop_restarts_from_hello(tmp_path):
 def test_parse_endpoint():
     name, path, port = replay.parse_endpoint("stack=recordings/x/stack.jsonl:8090")
     assert (name, str(path), port) == ("stack", "recordings/x/stack.jsonl", 8090)
+
+
+def test_parse_endpoint_reports_a_bad_spec_as_an_argparse_error():
+    for spec in ("stack.jsonl:8090", "stack=stack.jsonl", "stack=stack.jsonl:eighty"):
+        with pytest.raises(argparse.ArgumentTypeError, match="NAME=FILE:PORT"):
+            replay.parse_endpoint(spec)
+
+
+def test_a_finished_endpoint_stops_listening(tmp_path):
+    # The closed socket is the only kill signal the recording carries, so a page that
+    # reconnects must fail to connect instead of replaying the file from the start
+    # (design sections 5.3 and 6.3).
+    p = tmp_path / "a.jsonl"
+    write_jsonl(p, [HELLO, ego(0, 1.0), ego(10, 2.0)])
+
+    async def run():
+        servers = await replay.serve({"a": (p, 18704)}, speed=100.0)
+        async with websockets.connect("ws://127.0.0.1:18704") as ws:
+            with pytest.raises(websockets.ConnectionClosed):
+                while True:
+                    await ws.recv()
+        await servers[0].wait_closed()
+        with pytest.raises(OSError):
+            await websockets.connect("ws://127.0.0.1:18704")
+
+    asyncio.run(run())
 
 
 def test_hello_is_never_delayed_even_when_its_t_ms_is_later(tmp_path):
