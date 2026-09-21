@@ -29,12 +29,18 @@ async def record(name: str, url: str, out: pathlib.Path, seconds: float | None) 
                 except (TimeoutError, websockets.ConnectionClosed):
                     break
                 try:
-                    schema.validate_line(raw)
+                    msg = schema.validate_line(raw)
                 except (ValueError, jsonschema.ValidationError) as e:
                     print(f"{name}: invalid frame skipped: {e}", file=sys.stderr)
                     continue
                 f.write(raw.strip() + "\n")
                 n += 1
+                if n == 1 and msg["type"] != "hello":
+                    print(
+                        f"{name}: first message is not a hello, "
+                        "replay.py will not be able to serve this recording",
+                        file=sys.stderr,
+                    )
     return n
 
 

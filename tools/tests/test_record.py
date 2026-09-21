@@ -48,3 +48,27 @@ def test_record_skips_invalid_lines_but_keeps_going(tmp_path, capsys):
 
     assert asyncio.run(run()) == 2
     assert "invalid" in capsys.readouterr().err
+
+
+def test_record_warns_but_keeps_recording_when_first_frame_is_not_hello(tmp_path, capsys):
+    out = tmp_path / "out"
+
+    async def run():
+        async def handler(ws):
+            await ws.send(json.dumps({"source": "t", "type": "ego", "t_ms": 0, "speed_mps": 0}))
+            await ws.send(json.dumps({"source": "t", "type": "ego", "t_ms": 1, "speed_mps": 1}))
+            await ws.wait_closed()
+
+        import websockets
+
+        server = await websockets.serve(handler, "127.0.0.1", 18705)
+        try:
+            return await record.record("c", "ws://127.0.0.1:18705", out, seconds=0.5)
+        finally:
+            server.close()
+            await server.wait_closed()
+
+    assert asyncio.run(run()) == 2
+    assert "hello" in capsys.readouterr().err
+    got = [json.loads(ln) for ln in (out / "c.jsonl").read_text().splitlines()]
+    assert len(got) == 2
