@@ -3,9 +3,7 @@
   "type": "hello",
   "t_ms": 0,
   "schema": 1,
-  "roles": [
-    "stack"
-  ],
+  "roles": ["stack"],
   "name": "VisionPilot",
   "device": "R-Car X5H NPU"
 }

@@ -14,7 +14,11 @@
     "pose_map": {
       "type": "object",
       "required": ["x", "y", "yaw"],
-      "properties": { "x": { "type": "number" }, "y": { "type": "number" }, "yaw": { "type": "number" } }
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "yaw": { "type": "number" }
+      }
     }
   }
 }

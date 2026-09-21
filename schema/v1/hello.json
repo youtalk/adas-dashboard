@@ -9,7 +9,11 @@
     "type": { "const": "hello" },
     "t_ms": { "type": "number" },
     "schema": { "const": 1 },
-    "roles": { "type": "array", "minItems": 1, "items": { "enum": ["stack", "vehicle", "map", "supervisor"] } },
+    "roles": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "enum": ["stack", "vehicle", "map", "supervisor"] }
+    },
     "name": { "type": "string" },
     "device": { "type": "string" }
   }

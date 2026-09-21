@@ -1,0 +1,34 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npx tsc
+      - run: npm run build
+      - run: npm test
+  tools:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r tools/requirements.txt
+      - run: pytest tools -q
+      - run: python3 -m tools.synth /tmp/out && diff -r /tmp/out recordings/ces2027-kill-route
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: pre-commit/action@v3.0.1

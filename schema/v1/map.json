@@ -17,7 +17,16 @@
         "required": ["kind", "pts"],
         "properties": {
           "kind": { "type": "string", "minLength": 1 },
-          "pts": { "type": "array", "minItems": 2, "items": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 } }
+          "pts": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "array",
+              "items": { "type": "number" },
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
         }
       }
     }

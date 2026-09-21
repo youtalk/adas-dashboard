@@ -10,12 +10,19 @@
     "t_ms": { "type": "number" },
     "frame": { "enum": ["ego", "map"] },
     "width_m": { "type": "number", "exclusiveMinimum": 0 },
-    "pts": { "type": "array", "items": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 } },
+    "pts": {
+      "type": "array",
+      "items": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 }
+    },
     "behavior": { "type": "string" },
     "stop": {
       "type": "object",
       "required": ["x", "y", "reason"],
-      "properties": { "x": { "type": "number" }, "y": { "type": "number" }, "reason": { "type": "string" } }
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "reason": { "type": "string" }
+      }
     }
   }
 }
