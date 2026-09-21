@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/youtalk/adas-dashboard/schema/v1/lanes.json",
+  "title": "lanes",
+  "type": "object",
+  "required": ["source", "type", "t_ms", "frame", "lanes"],
+  "properties": {
+    "source": { "type": "string", "minLength": 1 },
+    "type": { "const": "lanes" },
+    "t_ms": { "type": "number" },
+    "frame": { "enum": ["ego", "map"] },
+    "lanes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "pts"],
+        "properties": {
+          "kind": { "type": "string", "minLength": 1 },
+          "pts": { "type": "array", "items": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 } }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/youtalk/adas-dashboard/schema/v1/map.json",
+  "title": "map",
+  "type": "object",
+  "required": ["source", "type", "t_ms", "frame", "features"],
+  "properties": {
+    "source": { "type": "string", "minLength": 1 },
+    "type": { "const": "map" },
+    "t_ms": { "type": "number" },
+    "frame": { "const": "map" },
+    "range_m": { "type": "number", "exclusiveMinimum": 0 },
+    "features": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "pts"],
+        "properties": {
+          "kind": { "type": "string", "minLength": 1 },
+          "pts": { "type": "array", "minItems": 2, "items": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 } }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "source": "visionpilot",
+  "type": "status",
+  "t_ms": 812345.6,
+  "name": "VisionPilot",
+  "device": "R-Car X5H NPU",
+  "mode": "active",
+  "latency_ms": 24.7,
+  "stages": {
+    "pre": 1.8,
+    "AutoDrive": 8.1,
+    "AutoSteer": 7.2,
+    "AutoSpeed": 6.9
+  },
+  "speed_limit_mps": 13.4
+}

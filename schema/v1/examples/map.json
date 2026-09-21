@@ -1,0 +1,35 @@
+{
+  "source": "carla",
+  "type": "map",
+  "t_ms": 812345.6,
+  "frame": "map",
+  "range_m": 200,
+  "features": [
+    {
+      "kind": "lane_dashed",
+      "pts": [
+        [
+          10.0,
+          -40.0
+        ],
+        [
+          20.0,
+          -40.1
+        ]
+      ]
+    },
+    {
+      "kind": "stop_line",
+      "pts": [
+        [
+          48.0,
+          -42.0
+        ],
+        [
+          48.0,
+          -38.0
+        ]
+      ]
+    }
+  ]
+}
