@@ -31,17 +31,16 @@ def parse_endpoint(spec: str) -> tuple[str, pathlib.Path, int]:
 
 async def _play(ws, msgs: list[tuple[float, str]], speed: float, loop: bool) -> None:
     while True:
-        # hello goes out immediately, and the playback clock starts at the message
-        # after it: hello's own t_ms=0 must not become `prev`, or the gap between
-        # hello and the first real message gets counted as a wait. Don't "fix" this
-        # back to `prev = t_ms` unconditionally.
+        # hello goes out immediately. The playback clock starts at the message
+        # after it, so the gap between hello and the first real message is not
+        # a wait. Do not fold hello back into the delay loop.
+        await ws.send(msgs[0][1])
         prev = msgs[1][0] if len(msgs) > 1 else msgs[0][0]
-        for i, (t_ms, raw) in enumerate(msgs):
+        for t_ms, raw in msgs[1:]:
             delay = (t_ms - prev) / 1000.0 / speed
             if delay > 0:
                 await asyncio.sleep(delay)
-            if i > 0:
-                prev = t_ms
+            prev = t_ms
             await ws.send(raw)
         if not loop:
             await ws.wait_closed()

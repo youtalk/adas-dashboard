@@ -73,3 +73,25 @@ def test_loop_restarts_from_hello(tmp_path):
 def test_parse_endpoint():
     name, path, port = replay.parse_endpoint("stack=recordings/x/stack.jsonl:8090")
     assert (name, str(path), port) == ("stack", "recordings/x/stack.jsonl", 8090)
+
+
+def test_hello_is_never_delayed_even_when_its_t_ms_is_later(tmp_path):
+    # hello.t_ms is schema-legal but larger than every later message's t_ms. hello
+    # must still go out immediately, not after the ~4.9 s gap a naive delay
+    # calculation would produce.
+    p = tmp_path / "a.jsonl"
+    late_hello = {"source": "t", "type": "hello", "t_ms": 5000, "schema": 1, "roles": ["vehicle"]}
+    write_jsonl(p, [late_hello, ego(100, 1.0), ego(200, 2.0)])
+
+    async def run():
+        servers = await replay.serve({"a": (p, 18703)}, speed=1.0)
+        try:
+            return await collect(18703, 1)
+        finally:
+            for s in servers:
+                s.close()
+                await s.wait_closed()
+
+    msgs, elapsed = asyncio.run(run())
+    assert msgs[0]["type"] == "hello"
+    assert elapsed < 0.5
