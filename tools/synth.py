@@ -20,6 +20,8 @@ LANE_W = 3.5
 STACK_T0 = 812000.0
 WORLD_T0 = 1790000000000.0
 SPEED_LIMIT_MPS = 13.4
+TRUCK_BIRTH_S, TRUCK_DEATH_S = 8.0, 30.0
+LDW_S, LDW_HOLD_S = 12.0, 2.0
 
 
 def road_y(x: float) -> float:
@@ -170,34 +172,35 @@ def generate(out_dir: pathlib.Path) -> None:
         if t > KILL_S:
             continue
         gap = lead_gap(t)
-        lx, ly = offset(x + gap, 0.0)
-        ox, oy = to_ego(lx, ly, x, y, yaw)
-        tx, ty = to_ego(*offset(x + 70.0, LANE_W), x, y, yaw)
-        objects = [
-            {
-                "id": 7,
-                "class": "car",
+
+        def obj(oid, cls, station, d, size, yaw_off=0.0, x=x, y=y, yaw=yaw, **extra):
+            """One object at a station ahead, d meters left of the centerline."""
+            ox, oy = to_ego(*offset(x + station, d), x, y, yaw)
+            return {
+                "id": oid,
+                "class": cls,
                 "x": ox,
                 "y": oy,
-                "yaw": 0.0,
-                "length": 4.5,
-                "width": 1.9,
-                "height": 1.5,
-                "lead": True,
-                "distance_m": round(gap, 1),
-            },
-            {
-                "id": 9,
-                "class": "truck",
-                "x": tx,
-                "y": ty,
-                "yaw": 0.0,
-                "length": 10.0,
-                "width": 2.4,
-                "height": 3.2,
-                "lead": False,
-            },
+                "yaw": round(road_yaw(x + station) - yaw + yaw_off, 4),
+                "length": size[0],
+                "width": size[1],
+                "height": size[2],
+                **extra,
+            }
+
+        # The lead car keeps height / length at 0.333, the car ahead in the left lane
+        # is at 0.375 so the suv rule fires (design section 9), and the barrier has no
+        # mesh so the plain box fallback is exercised (design section 6.2). The barrier
+        # stands across the shoulder like a lane taper, so one object has a yaw that a
+        # missing rotation would clearly show.
+        objects = [
+            obj(7, "car", gap, 0.0, (4.5, 1.9, 1.5), lead=True, distance_m=round(gap, 1)),
+            obj(11, "car", 45.0, LANE_W, (4.8, 2.0, 1.8), lead=False),
+            obj(13, "barrier", 18.0, -LANE_W, (1.0, 0.6, 1.1), yaw_off=0.26, lead=False),
         ]
+        # The truck is born and dies inside the run, so fade in and fade out have data.
+        if TRUCK_BIRTH_S <= t < TRUCK_DEATH_S:
+            objects.append(obj(9, "truck", 70.0, LANE_W, (10.0, 2.4, 3.2), lead=False))
         stack.append(msg("visionpilot", "objects", st, frame="ego", objects=objects))
         lanes = [
             {
@@ -219,26 +222,28 @@ def generate(out_dir: pathlib.Path) -> None:
                 accel_mps2=0.0,
             )
         )
-        fcw = gap / v < 1.5
-        stack.append(
-            msg(
-                "visionpilot",
-                "alerts",
-                st,
-                alerts=(
-                    [
-                        {
-                            "code": "FCW",
-                            "severity": "critical",
-                            "text": "Brake: vehicle ahead",
-                            "target": "lead",
-                        }
-                    ]
-                    if fcw
-                    else []
-                ),
+        alerts = []
+        if gap / v < 1.5:
+            alerts.append(
+                {
+                    "code": "FCW",
+                    "severity": "critical",
+                    "text": "Brake: vehicle ahead",
+                    "target": "lead",
+                }
             )
-        )
+        # A warn alert on a lane, so the non-pulsing treatment and a target that is not
+        # the lead vehicle both have data (design section 6.3).
+        if LDW_S <= t < LDW_S + LDW_HOLD_S:
+            alerts.append(
+                {
+                    "code": "LLDW",
+                    "severity": "warn",
+                    "text": "Lane departure left",
+                    "target": "lane_left",
+                }
+            )
+        stack.append(msg("visionpilot", "alerts", st, alerts=alerts))
         if i % 10 == 0:
             stack.append(
                 msg(

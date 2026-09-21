@@ -2,6 +2,9 @@ import pathlib
 
 from tools import schema, synth
 
+# The classes that have a mesh (design section 6.2). Anything else draws as a box.
+MESH_CLASSES = {"car", "suv", "truck", "bus", "trailer", "pedestrian", "cyclist", "bicycle"}
+
 
 def lines(p: pathlib.Path) -> list[dict]:
     return [schema.validate_line(ln) for ln in p.read_text().splitlines() if ln.strip()]
@@ -56,12 +59,24 @@ def test_scenario_reaches_every_state(tmp_path):
     # The ego stops at about 44.5 s, per the scenario.
     stopped = [m for m in egos if m["speed_mps"] == 0.0]
     assert abs((stopped[0]["t_ms"] - world_t0) / 1000 - 44.5) < 0.2
-    # The lead object exists and every object has a mesh class or a box class.
+    # The objects reach the lead ring, the suv height rule and the box fallback.
     objs = [o for m in stack if m["type"] == "objects" for o in m["objects"]]
     assert any(o.get("lead") for o in objs)
-    # Map features are in the map frame and cover the drive.
+    assert any(o["class"] == "car" and o["height"] / o["length"] > 0.36 for o in objs)
+    assert any(o["class"] == "car" and o["height"] / o["length"] <= 0.36 for o in objs)
+    assert {o["class"] for o in objs} - MESH_CLASSES
+    # An object appears and disappears inside the run, so the fades have data.
+    seen = [{o["id"] for o in m["objects"]} for m in stack if m["type"] == "objects"]
+    assert seen[0] != max(seen, key=len) and seen[0] == seen[-1]
+    # A warn alert on a lane exists next to the critical lead alert.
+    warns = [
+        a for m in stack if m["type"] == "alerts" for a in m["alerts"] if a["severity"] == "warn"
+    ]
+    assert warns and warns[0]["target"] == "lane_left"
+    # Map features are in the map frame and cover the drive to the last ego pose.
     maps = [m for m in world if m["type"] == "map"]
     assert maps and all(m["frame"] == "map" for m in maps)
+    assert max(p[0] for f in maps[-1]["features"] for p in f["pts"]) > egos[-1]["pose_map"]["x"]
 
 
 def test_generate_is_deterministic(tmp_path):
