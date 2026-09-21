@@ -43,7 +43,9 @@ async def _play(ws, msgs: list[tuple[float, str]], speed: float, loop: bool) -> 
             prev = t_ms
             await ws.send(raw)
         if not loop:
-            await ws.wait_closed()
+            # A real stack that dies closes its socket. Returning here, instead of
+            # waiting on the client, lets the handler exit and the connection close,
+            # so replay honestly reproduces a Stack lost (design section 6.3).
             return
 
 
