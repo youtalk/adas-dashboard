@@ -1,8 +1,13 @@
-"""Validate dashboard messages against schema/v1 (design section 5)."""
+"""Validate dashboard messages against schema/v1 (design section 5).
+
+Usage: python3 -m tools.schema [FILE.jsonl ...]   (standard input when no file is given)
+Prints the first failure per file and exits non-zero if any file failed.
+"""
 
 import functools
 import json
 import pathlib
+import sys
 
 import jsonschema
 
@@ -27,3 +32,19 @@ def validate_line(line: str) -> dict:
     msg = json.loads(line)
     validate(msg)
     return msg
+
+
+if __name__ == "__main__":
+    bad = False
+    for name in sys.argv[1:] or ["-"]:
+        text = sys.stdin.read() if name == "-" else pathlib.Path(name).read_text()
+        for i, line in enumerate(text.splitlines(), 1):
+            if not line.strip():
+                continue
+            try:
+                validate_line(line)
+            except (json.JSONDecodeError, jsonschema.ValidationError) as e:
+                print(f"{name}:{i}: {str(e).splitlines()[0]}")
+                bad = True
+                break
+    sys.exit(1 if bad else 0)

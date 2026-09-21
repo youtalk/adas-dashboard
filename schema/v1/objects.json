@@ -25,7 +25,6 @@
           "height": { "type": "number", "exclusiveMinimum": 0 },
           "lead": { "type": "boolean" },
           "distance_m": { "type": "number", "minimum": 0 },
-          "velocity_mps": { "type": "number" },
           "predicted_paths": {
             "type": "array",
             "items": {
