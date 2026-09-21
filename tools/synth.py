@@ -51,7 +51,7 @@ def ego_speed(t: float) -> float:
 def lead_gap(t: float) -> float:
     """Gap to the lead car in meters. 40 m, closes to 14 m, then opens again."""
     pts = [(0, 40.0), (20, 40.0), (24, 14.0), (27, 14.0), (33, 40.0), (END_S, 40.0)]
-    for (t0, g0), (t1, g1) in zip(pts, pts[1:], strict=True):
+    for (t0, g0), (t1, g1) in zip(pts, pts[1:], strict=False):
         if t <= t1:
             return g0 + (g1 - g0) * (t - t0) / (t1 - t0)
     return 40.0
