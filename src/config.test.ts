@@ -31,6 +31,13 @@ describe("loadConfig", () => {
     expect(c.camera_url).toBe("http://x/");
   });
 
+  it("drops a scalar override whose value the type does not allow", () => {
+    const q = new URLSearchParams("units=furlongs&theme=light");
+    const c = loadConfig(q, file);
+    expect(c.units).toBe("mph");
+    expect(c.theme).toBe("light");
+  });
+
   it("ignores unknown query keys", () => {
     const c = loadConfig(new URLSearchParams("foo=bar"), file);
     expect(c).toEqual(file);
