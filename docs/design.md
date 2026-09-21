@@ -49,7 +49,7 @@ supervisor adapter ──ws──┘
 replay tool (tools/replay.py) ──ws──▶ browser page   (development, no hardware)
 ```
 
-Four roles feed the page. Each role is a WebSocket endpoint that sends JSON text frames. The page holds the latest message of each type and draws from that. The page never sends data back, except an optional `{"type":"ping"}`.
+Four roles feed the page. Each role is a WebSocket endpoint that sends JSON text frames. The page holds the latest message of each type per endpoint and draws from that. The state is keyed per endpoint, never globally, because two endpoints send the same type. The stack and the supervisor both send `status`, and section 6.3 must tell one from the other. They both send `alerts`, and the page shows the union of the two lists. An empty list clears only the alerts of the endpoint that sent it. The page never sends data back, except an optional `{"type":"ping"}`.
 
 | Role         | Sends                                      | Example sources                                                    |
 | ------------ | ------------------------------------------ | ------------------------------------------------------------------ |
@@ -60,7 +60,7 @@ Four roles feed the page. Each role is a WebSocket endpoint that sends JSON text
 
 One endpoint can carry more than one role. The `hello` message lists the roles that an endpoint carries. In the CES setup, the VisionPilot process on the board serves `stack`. One Python process on the CARLA host serves `vehicle`, `map` and `supervisor`.
 
-The endpoints are given in the page URL, for example `index.html?stack=ws://192.168.0.20:8090/stack&world=ws://192.168.0.1:8091/world`. If the URL names no endpoint, the page reads `config.json` next to `index.html`. Endpoint names in the URL and in `config.json` are free. The page connects to all of them and learns the roles from `hello`.
+The page reads `config.json` next to `index.html`. The page URL overrides it key by key (section 7), for example `index.html?stack=ws://192.168.0.20:8090/stack&world=ws://192.168.0.1:8091/world`. Endpoint names in the URL and in `config.json` are free. The page connects to all of them and learns the roles from `hello`.
 
 ## 5. Message schema
 
@@ -287,6 +287,7 @@ The schema must serve stacks beyond the CES demo. That range goes from a camera-
 - A renamed field, a removed field, a changed unit or a changed frame is a breaking change. It raises `hello.schema`, and the page keeps the old version for one release.
 - Class names and feature kinds are strings with a recommended list, never a closed enumeration.
 - Schema 1 reserves `predicted_paths`, `behavior`, `stop`, the map kinds `crosswalk`, `stop_line` and `traffic_light`, the `remote` authority, and the `signals` type. An L4 adapter can send them today. The page will draw them once the frontend supports them.
+- The page ignores an unknown `type`, but the tools do not. `tools/schema.py` validates every message against the nine schema files in `schema/v1/`. It rejects a `type` that has no file, and `replay.py` and `record.py` reject it with it. To add a tenth type, add its schema file in the same commit.
 
 An Autoware stack maps onto the roles through the AD API, so the adapter does not depend on internal topics:
 
@@ -393,7 +394,7 @@ adas-dashboard/
 ├── docs/            design.md, mockups/
 ├── schema/v1/       JSON Schema per message type
 ├── recordings/      JSONL recordings for development
-├── tools/           replay.py, record.py (Python 3.12)
+├── tools/           replay.py, record.py, synth.py, schema.py (Python 3.12)
 ├── adapters/        carla/, safety_island/ (Python)
 ├── assets/meshes/   .glb meshes, LICENSE, convert script
 ├── src/             frontend
