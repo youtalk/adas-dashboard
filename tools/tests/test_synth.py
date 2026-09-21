@@ -50,6 +50,12 @@ def test_scenario_reaches_every_state(tmp_path):
     egos = [m for m in world if m["type"] == "ego"]
     assert egos[-1]["speed_mps"] == 0.0
     assert max(m["speed_mps"] for m in egos) == synth.CRUISE_MPS
+    # The world file runs to END_S, well past the stack file's kill.
+    world_t0 = world[1]["t_ms"]
+    assert abs((world[-1]["t_ms"] - world_t0) / 1000 - synth.END_S) < 0.2
+    # The ego stops at about 44.5 s, per the scenario.
+    stopped = [m for m in egos if m["speed_mps"] == 0.0]
+    assert abs((stopped[0]["t_ms"] - world_t0) / 1000 - 44.5) < 0.2
     # The lead object exists and every object has a mesh class or a box class.
     objs = [o for m in stack if m["type"] == "objects" for o in m["objects"]]
     assert any(o.get("lead") for o in objs)
