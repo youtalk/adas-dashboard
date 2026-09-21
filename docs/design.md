@@ -386,7 +386,7 @@ URL query parameters override `config.json` key by key.
 - Vite, TypeScript, three.js. No UI framework, no CSS framework. Node 22 LTS.
 - `npm run build` produces `dist/`, a static folder that any HTTP server can serve. `npm run dev` serves it with hot reload. `python3 -m http.server -d dist` is enough on the booth.
 - Tests with Vitest: the state machine (section 6.3) and the frame transforms (`map` to `ego`). One replay smoke test that loads a recording and makes sure that all six states are reached. No end-to-end browser tests are required.
-- Lint and format with the repository's `pre-commit` configuration (ESLint, Prettier, cspell, markdownlint). CI runs build, tests and pre-commit on every pull request.
+- Lint and format with the repository's `pre-commit` configuration: prettier, markdownlint-cli2, ruff, ruff-format, and the generic pre-commit hooks. ESLint and cspell arrive in W1, because the frontend code will then exist for cspell's word list and for ESLint to lint. CI runs build, tests and pre-commit on every pull request.
 
 ```text
 adas-dashboard/
