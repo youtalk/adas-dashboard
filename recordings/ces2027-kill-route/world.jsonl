@@ -512,6 +512,8 @@
 {"source": "bench", "type": "ego", "t_ms": 1790000040400.0, "speed_mps": 12.0, "steer_rad": -0.012, "accel_mps2": 0.0, "pose_map": {"x": 486.0, "y": -4.73, "yaw": -0.0307}}
 {"source": "bench", "type": "ego", "t_ms": 1790000040500.0, "speed_mps": 12.0, "steer_rad": -0.012, "accel_mps2": -3.0, "pose_map": {"x": 487.2, "y": -4.77, "yaw": -0.0303}}
 {"source": "safety_island", "type": "control", "t_ms": 1790000040500.0, "authority": "supervisor", "steer_rad": 0.0, "accel_mps2": -3.0}
+{"source": "safety_island", "type": "status", "t_ms": 1790000040500.0, "name": "Safety Island", "device": "Cortex-R52", "mode": "active"}
+{"source": "safety_island", "type": "alerts", "t_ms": 1790000040500.0, "alerts": [{"code": "SI_STOP", "severity": "critical", "text": "VisionPilot lost. Safety Island stopping"}]}
 {"source": "bench", "type": "ego", "t_ms": 1790000040600.0, "speed_mps": 11.7, "steer_rad": -0.012, "accel_mps2": -3.0, "pose_map": {"x": 488.37, "y": -4.8, "yaw": -0.03}}
 {"source": "safety_island", "type": "control", "t_ms": 1790000040600.0, "authority": "supervisor", "steer_rad": 0.0, "accel_mps2": -3.0}
 {"source": "bench", "type": "ego", "t_ms": 1790000040700.0, "speed_mps": 11.4, "steer_rad": -0.012, "accel_mps2": -3.0, "pose_map": {"x": 489.51, "y": -4.84, "yaw": -0.0296}}

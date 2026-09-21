@@ -133,8 +133,11 @@ def generate(out_dir: pathlib.Path) -> None:
                     accel_mps2=-BRAKE_MPS2 if v > 0 else 0.0,
                 )
             )
-        if i % 10 == 0:
-            engaged = t >= TAKEOVER_S
+        engaged = t >= TAKEOVER_S
+        # status and alerts are 1 Hz or on change (design section 5.2), and the
+        # takeover is a change, so also emit once on the takeover step itself.
+        takeover_step = engaged and (t - DT) < TAKEOVER_S
+        if i % 10 == 0 or takeover_step:
             world.append(
                 msg(
                     "safety_island",
