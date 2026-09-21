@@ -2,3 +2,5 @@ node_modules/
 dist/
 .superpowers/
 __pycache__/
+.pytest_cache/
+.venv/
