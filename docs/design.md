@@ -91,7 +91,7 @@ The schema is versioned. JSON Schema files live in `schema/v1/`. The page reject
  "pose_map": {"x": 12.3, "y": -45.6, "yaw": 1.57}}
 ```
 
-`objects` (role `stack`, every perception frame). `class` is one of `car`, `suv`, `truck`, `bus`, `trailer`, `pedestrian`, `cyclist`, `unknown`. This is the set of meshes. `id` is stable across frames for the same object, so the page can interpolate motion and fade objects in and out. `lead` marks the closest object in the ego path.
+`objects` (role `stack`, every perception frame). `class` is a free string. The page has meshes for `car`, `suv`, `truck`, `bus`, `trailer`, `pedestrian`, `cyclist` and `bicycle`. Any other class is drawn as a box. `id` is stable across frames for the same object, so the page can interpolate motion and fade objects in and out. `lead` marks the closest object in the ego path. `predicted_paths?` is a list of point lists with a `confidence` each, reserved for stacks that predict motion. In schema 1 the page ignores it.
 
 ```json
 {"source": "visionpilot", "type": "objects", "t_ms": 812345.6, "frame": "ego",
@@ -99,7 +99,8 @@ The schema is versioned. JSON Schema files live in `schema/v1/`. The page reject
    {"id": 7, "class": "car", "x": 32.1, "y": -0.3, "yaw": 0.0,
     "length": 4.5, "width": 1.9, "height": 1.5, "lead": true, "distance_m": 32.1},
    {"id": 9, "class": "truck", "x": 61.0, "y": 3.4, "yaw": 0.0,
-    "length": 10.0, "width": 2.4, "height": 3.2, "lead": false}
+    "length": 10.0, "width": 2.4, "height": 3.2, "lead": false,
+    "predicted_paths": [{"confidence": 0.8, "pts": [[62.0, 3.4], [70.0, 3.5]]}]}
  ]}
 ```
 
@@ -111,18 +112,20 @@ The schema is versioned. JSON Schema files live in `schema/v1/`. The page reject
            {"kind": "right", "pts": [[1.0, -1.7], [5.0, -1.7], [10.0, -1.72]]}]}
 ```
 
-`trajectory` (role `stack`): the planned path as points. A stack that plans a curve sends samples of it, for example every meter to 150 m.
+`trajectory` (role `stack`): the planned path as points. A stack that plans a curve sends samples of it, for example every meter to 150 m. `behavior?` is a free string such as `lane_change_left` or `yield`, and `stop?` is a stop point with a `reason` string. Both are reserved for stacks that plan behaviors. In schema 1 the page ignores them.
 
 ```json
 {"source": "visionpilot", "type": "trajectory", "t_ms": 812345.6, "frame": "ego",
- "width_m": 2.3, "pts": [[0.5, 0.0], [1.5, 0.0], [2.5, 0.01]]}
+ "width_m": 2.3, "pts": [[0.5, 0.0], [1.5, 0.0], [2.5, 0.01]],
+ "behavior": "keep_lane", "stop": {"x": 48.0, "y": 0.0, "reason": "traffic_light"}}
 ```
 
-`map_lanes` (role `map`, on connect and whenever the ego moved more than 20 m, `frame` is always `map`). `kind` is `solid`, `dashed` or `edge`.
+`map` (role `map`, on connect and whenever the ego moved more than 20 m, `frame` is always `map`). `features` is a list of polylines with a `kind`. The page draws `lane_solid`, `lane_dashed` and `road_edge` in schema 1 and ignores other kinds. `crosswalk`, `stop_line` and `traffic_light` are the reserved kinds for maps with such features.
 
 ```json
-{"source": "carla", "type": "map_lanes", "t_ms": 812345.6, "frame": "map", "range_m": 200,
- "lanes": [{"kind": "dashed", "pts": [[10.0, -40.0], [20.0, -40.1]]}]}
+{"source": "carla", "type": "map", "t_ms": 812345.6, "frame": "map", "range_m": 200,
+ "features": [{"kind": "lane_dashed", "pts": [[10.0, -40.0], [20.0, -40.1]]},
+              {"kind": "stop_line", "pts": [[48.0, -42.0], [48.0, -38.0]]}]}
 ```
 
 `alerts` (role `stack` or `supervisor`). The list is the full set of active alerts. An empty list clears them. `severity` is `info`, `warn` or `critical`. `text` is what the page shows. `code` is a short machine name shown in small print. `target` tells the page what to color: `lead`, `trajectory`, `lane_left`, `lane_right`, or absent.
@@ -132,7 +135,7 @@ The schema is versioned. JSON Schema files live in `schema/v1/`. The page reject
  "alerts": [{"code": "FCW", "severity": "critical", "text": "Brake: vehicle ahead", "target": "lead"}]}
 ```
 
-`control` (role `stack` or `supervisor`, 10 Hz or on change). `authority` is `stack`, `supervisor` or `driver`. The page treats the newest `control` message from any endpoint as the truth.
+`control` (role `stack` or `supervisor`, 10 Hz or on change). `authority` is `stack`, `supervisor`, `driver` or `remote`. The page treats the newest `control` message from any endpoint as the truth. `driver` and `remote` get the same amber frame as `supervisor` in schema 1.
 
 ```json
 {"source": "safety_island", "type": "control", "t_ms": 523.0,
@@ -155,9 +158,33 @@ The schema is versioned. JSON Schema files live in `schema/v1/`. The page reject
 | `stack` | 10 to 40 Hz | one `objects`, `lanes`, `trajectory` per perception frame |
 | `vehicle` | 10 to 50 Hz | |
 | `map` | on connect, then on movement | a message is at most 1 MB |
+| `signals` | reserved | traffic light states, not in schema 1 |
 | `supervisor` | 10 Hz | `control` and `status` |
 
 The page reconnects to a closed endpoint with a backoff from 0.5 s to 5 s and keeps trying forever. A closed `stack` endpoint is a meaningful event (section 6.3), not an error.
+
+### 5.4 Growing the schema
+
+The schema must serve stacks beyond the CES demo. That range goes from a camera-only L2 stack to an L4 stack with prediction, traffic lights and remote operation. The rules for growth are:
+
+- A new optional field on an existing type, or a new `type`, does not change the schema version. The page ignores what it does not know.
+- A renamed field, a removed field, a changed unit or a changed frame is a breaking change. It raises `hello.schema`, and the page keeps the old version for one release.
+- Class names and feature kinds are strings with a recommended list, never a closed enumeration.
+- Schema 1 reserves `predicted_paths`, `behavior`, `stop`, the map kinds `crosswalk`, `stop_line` and `traffic_light`, the `remote` authority, and the `signals` type. An L4 adapter can send them today. The page will draw them once the frontend supports them.
+
+An Autoware stack maps onto the roles through the AD API, so the adapter does not depend on internal topics:
+
+| Role | Type | AD API source |
+|---|---|---|
+| `stack` | `objects` | `/api/perception/objects` (class, pose, size, predicted paths) |
+| `stack` | `trajectory` | `/api/planning/...` trajectory and velocity factors (`stop.reason`) |
+| `stack` | `alerts`, `status` | `/api/fail_safe/mrm_state`, `/api/operation_mode/state`, diagnostics |
+| `vehicle` | `ego` | `/api/vehicle/kinematics`, `/api/vehicle/status` |
+| `map` | `map` | Lanelet2 lane boundaries, crosswalks and stop lines around the ego |
+| `supervisor` | `control` | `/api/operation_mode/state`: `autonomous` is `stack`, `local` is `driver`, `remote` is `remote`, an MRM is `supervisor` |
+| `signals` | reserved | `/api/perception/traffic_signals` |
+
+This adapter is a future task in `adapters/autoware/`, not part of the CES 2027 milestones.
 
 ## 6. Screen design
 
@@ -316,6 +343,6 @@ For reference, not for MultiCoreWare to build.
 
 VisionPilot (`stack`): a WebSocket server in the VisionPilot process, next to the existing WebRTC stream in `modules/visualization/`, reusing Boost.Beast and nlohmann/json that are already linked. The existing `occupancy_bridge.cpp` conversion (pixels to ego frame through the homography, lane samples, path coefficients, CIPO) becomes the JSON producer. The trajectory is the path polynomial sampled every meter to 150 m. `class` is `car`, `suv` or `truck` from the same width heuristic the Occupancy view uses today. `alerts` come from `Plan::warnings` (`FCW`, `AEB`, `LLDW`, `RLDW`). `status.stages` come from the per-frame latency fields. A configuration flag makes the WebRTC stream send the raw resized camera image instead of the HUD image. The PiP then shows the camera and nothing else.
 
-CARLA (`vehicle`, `map`): a Python client on the CARLA host. It reads the ego actor's transform and velocity and the OpenDRIVE map. It sends `ego` at 20 Hz and `map_lanes` around the ego.
+CARLA (`vehicle`, `map`): a Python client on the CARLA host. It reads the ego actor's transform and velocity and the OpenDRIVE map. It sends `ego` at 20 Hz and `map` with the lane boundaries around the ego.
 
 Safety Island (`supervisor`): a ROS 2 node on the CARLA host on DDS domain 2. It watches the CR52's `control_cmd` and the bridge's source switch. It sends `control`, `status` and `alerts`. The `hello.name` is `Safety Island`, `device` is `Cortex-R52`.
