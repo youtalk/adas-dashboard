@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 480 270" font-family="system-ui, sans-serif" font-size="9">
+  <title>Layer legend: which source draws what</title>
+  <rect width="480" height="270" fill="#0b0f14"/>
+  <text x="16" y="24" fill="#e2e8f0" font-size="12" font-weight="700">Layers, bottom to top</text>
+
+  <g transform="translate(16,40)">
+    <rect width="448" height="34" rx="4" fill="#161d26"/>
+    <polyline points="12,26 40,8" stroke="#4b5661" stroke-width="2" fill="none"/>
+    <polyline points="28,26 56,8" stroke="#4b5661" stroke-width="1.5" stroke-dasharray="4 4" fill="none"/>
+    <text x="72" y="15" fill="#e2e8f0" font-weight="700">map_lanes</text>
+    <text x="72" y="27" fill="#94a3b8">source: map · frame: map · grey · unlimited range · survives a stack loss</text>
+  </g>
+
+  <g transform="translate(16,82)">
+    <rect width="448" height="34" rx="4" fill="#161d26"/>
+    <polyline points="12,26 40,8" stroke="#22d3ee" stroke-width="3" fill="none"/>
+    <text x="72" y="15" fill="#e2e8f0" font-weight="700">lanes</text>
+    <text x="72" y="27" fill="#94a3b8">source: stack · frame: ego · cyan · drawn only where the stack reports points</text>
+  </g>
+
+  <g transform="translate(16,124)">
+    <rect width="448" height="34" rx="4" fill="#161d26"/>
+    <polygon points="10,28 46,28 40,6 16,6" fill="#22c55e" opacity=".5"/>
+    <text x="72" y="15" fill="#e2e8f0" font-weight="700">trajectory</text>
+    <text x="72" y="27" fill="#94a3b8">source: stack · green ribbon · turns red while a critical alert is active</text>
+  </g>
+
+  <g transform="translate(16,166)">
+    <rect width="448" height="34" rx="4" fill="#161d26"/>
+    <path d="M12,28 L12,14 Q13,8 19,8 L27,8 Q33,8 34,14 L34,28 Z" fill="#3b82f6"/>
+    <path d="M40,28 L40,14 Q41,8 47,8 L55,8 Q61,8 62,14 L62,28 Z" fill="#ef4444"/>
+    <text x="72" y="15" fill="#e2e8f0" font-weight="700">objects</text>
+    <text x="72" y="27" fill="#94a3b8">source: stack · glTF mesh by class · blue traffic · red lead vehicle with distance label</text>
+  </g>
+
+  <g transform="translate(16,208)">
+    <rect width="448" height="34" rx="4" fill="#161d26"/>
+    <path d="M12,30 L12,14 Q14,6 24,5 L34,5 Q44,6 46,14 L46,30 Z" fill="#d9d9d9"/>
+    <text x="72" y="15" fill="#e2e8f0" font-weight="700">ego</text>
+    <text x="72" y="27" fill="#94a3b8">source: vehicle · white mesh · always drawn · pose_map places the map under it</text>
+  </g>
+
+  <text x="16" y="262" fill="#64748b" font-size="8">Above everything: alerts (pill and in-scene cues), control.authority (amber frame), status panel, camera PiP.</text>
+</svg>

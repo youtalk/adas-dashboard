@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 480 270" font-family="system-ui, sans-serif" font-size="9">
+  <title>Alert state: forward collision warning drawn in the scene plus a pill</title>
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0b0f14"/><stop offset="1" stop-color="#1c2530"/></linearGradient></defs>
+  <rect width="480" height="270" fill="url(#bg)"/>
+  <polygon points="40,270 440,270 300,40 180,40" fill="#161d26"/>
+  <polyline points="40,270 180,40" stroke="#4b5661" stroke-width="2" fill="none"/>
+  <polyline points="440,270 300,40" stroke="#4b5661" stroke-width="2" fill="none"/>
+  <polyline points="170,270 220,40" stroke="#4b5661" stroke-width="1.5" stroke-dasharray="8 8" fill="none"/>
+  <polyline points="310,270 260,40" stroke="#4b5661" stroke-width="1.5" stroke-dasharray="8 8" fill="none"/>
+  <polyline points="172,262 208,100" stroke="#22d3ee" stroke-width="3" fill="none" opacity=".9"/>
+  <polyline points="308,262 272,100" stroke="#22d3ee" stroke-width="3" fill="none" opacity=".9"/>
+  <!-- trajectory turns red: the cause is in the path -->
+  <polygon points="190,270 290,270 262,80 238,80" fill="#ef4444" opacity=".4"/>
+  <path d="M272,112 L272,100 Q273,95 278,95 L284,95 Q289,95 290,100 L290,112 Z" fill="#3b82f6"/>
+  <!-- lead vehicle with a red ring -->
+  <ellipse cx="242" cy="150" rx="34" ry="12" fill="none" stroke="#ef4444" stroke-width="2.5" opacity=".9"/>
+  <path d="M226,164 L226,140 Q228,130 238,129 L246,129 Q256,130 258,140 L258,164 Z" fill="#ef4444"/>
+  <rect x="220" y="112" width="44" height="12" rx="3" fill="#111" opacity=".8"/>
+  <text x="226" y="121" fill="#fca5a5">14 m · 1.1 s</text>
+  <ellipse cx="240" cy="254" rx="44" ry="8" fill="#000" opacity=".5"/>
+  <path d="M204,252 L204,214 Q210,192 232,190 L248,190 Q270,192 276,214 L276,252 Z" fill="#d9d9d9"/>
+  <path d="M212,214 Q216,199 232,197 L248,197 Q264,199 268,214 Z" fill="#a8b0b8"/>
+  <rect x="356" y="10" width="114" height="64" fill="#333" stroke="#666"/>
+  <text x="362" y="24" fill="#bbb">camera (raw)</text>
+  <rect x="10" y="176" width="118" height="84" rx="6" fill="#0f172a" opacity=".85"/>
+  <text x="18" y="196" fill="#fff" font-size="18" font-weight="700">27</text>
+  <text x="44" y="196" fill="#94a3b8">mph</text>
+  <rect x="86" y="182" width="34" height="18" rx="3" fill="none" stroke="#94a3b8"/>
+  <text x="92" y="195" fill="#e2e8f0" font-size="10">30</text>
+  <text x="18" y="212" fill="#fca5a5">lead 14 m · 1.1 s</text>
+  <circle cx="26" cy="232" r="8" fill="none" stroke="#e2e8f0" stroke-width="2"/>
+  <line x1="26" y1="232" x2="26" y2="224" stroke="#e2e8f0" stroke-width="2"/>
+  <rect x="42" y="226" width="60" height="6" rx="3" fill="#1e293b"/>
+  <rect x="50" y="226" width="22" height="6" rx="3" fill="#ef4444"/>
+  <text x="18" y="254" fill="#64748b" font-size="7">VisionPilot · 24.7 ms · R-Car X5H NPU</text>
+  <!-- pill, top center, only while the alert is active -->
+  <rect x="150" y="12" width="180" height="24" rx="12" fill="#b91c1c"/>
+  <text x="166" y="28" fill="#fff" font-size="10" font-weight="700">⚠ Brake: vehicle ahead</text>
+  <text x="300" y="28" fill="#fecaca" font-size="7">FCW</text>
+</svg>

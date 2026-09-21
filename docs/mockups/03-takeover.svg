@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 480 270" font-family="system-ui, sans-serif" font-size="9">
+  <title>Takeover state: stack layers ghosted, amber frame, ego keeps moving on vehicle data</title>
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0b0f14"/><stop offset="1" stop-color="#1c2530"/></linearGradient></defs>
+  <rect width="480" height="270" fill="url(#bg)"/>
+  <!-- map stays -->
+  <polygon points="40,270 440,270 300,40 180,40" fill="#161d26"/>
+  <polyline points="40,270 180,40" stroke="#4b5661" stroke-width="2" fill="none"/>
+  <polyline points="440,270 300,40" stroke="#4b5661" stroke-width="2" fill="none"/>
+  <polyline points="170,270 220,40" stroke="#4b5661" stroke-width="1.5" stroke-dasharray="8 8" fill="none"/>
+  <polyline points="310,270 260,40" stroke="#4b5661" stroke-width="1.5" stroke-dasharray="8 8" fill="none"/>
+  <!-- stack layers ghosted -->
+  <polyline points="172,262 208,100" stroke="#22d3ee" stroke-width="3" fill="none" opacity=".15"/>
+  <polyline points="308,262 272,100" stroke="#22d3ee" stroke-width="3" fill="none" opacity=".15"/>
+  <polygon points="190,270 290,270 262,80 238,80" fill="#22c55e" opacity=".08"/>
+  <path d="M228,140 L228,120 Q230,112 238,111 L246,111 Q254,112 256,120 L256,140 Z" fill="#ef4444" opacity=".2"/>
+  <path d="M272,112 L272,100 Q273,95 278,95 L284,95 Q289,95 290,100 L290,112 Z" fill="#3b82f6" opacity=".2"/>
+  <!-- ego keeps moving, brake lights on -->
+  <ellipse cx="240" cy="254" rx="44" ry="8" fill="#000" opacity=".5"/>
+  <path d="M204,252 L204,214 Q210,192 232,190 L248,190 Q270,192 276,214 L276,252 Z" fill="#d9d9d9"/>
+  <path d="M212,214 Q216,199 232,197 L248,197 Q264,199 268,214 Z" fill="#a8b0b8"/>
+  <rect x="206" y="246" width="14" height="4" rx="2" fill="#fb923c"/>
+  <rect x="260" y="246" width="14" height="4" rx="2" fill="#fb923c"/>
+  <!-- camera PiP frozen -->
+  <rect x="356" y="10" width="114" height="64" fill="#222" stroke="#666"/>
+  <text x="362" y="24" fill="#888">camera lost</text>
+  <!-- status panel: speed falling, supervisor line -->
+  <rect x="10" y="176" width="118" height="84" rx="6" fill="#0f172a" opacity=".85"/>
+  <text x="18" y="196" fill="#fff" font-size="18" font-weight="700">14</text>
+  <text x="44" y="196" fill="#94a3b8">mph ↓</text>
+  <text x="18" y="212" fill="#fdba74">Safety Island braking</text>
+  <circle cx="26" cy="232" r="8" fill="none" stroke="#e2e8f0" stroke-width="2"/>
+  <line x1="26" y1="232" x2="26" y2="224" stroke="#e2e8f0" stroke-width="2"/>
+  <rect x="42" y="226" width="60" height="6" rx="3" fill="#1e293b"/>
+  <rect x="44" y="226" width="28" height="6" rx="3" fill="#fb923c"/>
+  <text x="18" y="254" fill="#fdba74" font-size="7">Safety Island · Cortex-R52 · −3.0 m/s²</text>
+  <!-- pill -->
+  <rect x="120" y="12" width="236" height="24" rx="12" fill="#c2410c"/>
+  <text x="132" y="28" fill="#fff" font-size="10" font-weight="700">⚠ VisionPilot lost · Safety Island stopping</text>
+  <!-- amber frame -->
+  <rect x="3" y="3" width="474" height="264" fill="none" stroke="#fb923c" stroke-width="6"/>
+</svg>
