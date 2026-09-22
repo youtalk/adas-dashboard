@@ -102,6 +102,42 @@ def test_a_finished_endpoint_stops_listening(tmp_path):
     asyncio.run(run())
 
 
+def test_a_finished_endpoint_does_not_close_its_siblings(tmp_path):
+    # The handler closes servers[name] -- its own server only (replay.py's comment
+    # above that call). A refactor that closed every server instead would leave
+    # test_a_finished_endpoint_stops_listening green, since that test only checks the
+    # endpoint that finished, and would silently bring the bug back for every other
+    # endpoint. Pin isolation directly: a live sibling must still answer right after
+    # the short endpoint's server closes.
+    short = tmp_path / "short.jsonl"
+    write_jsonl(short, [HELLO, ego(0, 1.0), ego(10, 2.0)])
+    long = tmp_path / "long.jsonl"
+    write_jsonl(long, [HELLO, ego(0, 1.0), ego(60000, 2.0)])
+
+    async def run():
+        servers = await replay.serve({"short": (short, 18705), "long": (long, 18706)}, speed=100.0)
+        try:
+            async with websockets.connect("ws://127.0.0.1:18706") as long_ws:
+                assert json.loads(await long_ws.recv())["type"] == "hello"
+
+                async with websockets.connect("ws://127.0.0.1:18705") as short_ws:
+                    with pytest.raises(websockets.ConnectionClosed):
+                        while True:
+                            await short_ws.recv()
+                await servers[0].wait_closed()
+
+                with pytest.raises(OSError):
+                    await websockets.connect("ws://127.0.0.1:18705")
+
+                async with websockets.connect("ws://127.0.0.1:18706") as fresh:
+                    assert json.loads(await fresh.recv())["type"] == "hello"
+        finally:
+            servers[1].close()
+            await servers[1].wait_closed()
+
+    asyncio.run(run())
+
+
 def test_hello_is_never_delayed_even_when_its_t_ms_is_later(tmp_path):
     # hello.t_ms is schema-legal but larger than every later message's t_ms. hello
     # must still go out immediately, not after the ~4.9 s gap a naive delay
