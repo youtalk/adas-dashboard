@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/youtalk/adas-dashboard/schema/v1/alerts.json",
+  "title": "alerts",
+  "type": "object",
+  "required": ["source", "type", "t_ms", "alerts"],
+  "properties": {
+    "source": { "type": "string", "minLength": 1 },
+    "type": { "const": "alerts" },
+    "t_ms": { "type": "number" },
+    "alerts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "severity", "text"],
+        "properties": {
+          "code": { "type": "string", "minLength": 1 },
+          "severity": { "enum": ["info", "warn", "critical"] },
+          "text": { "type": "string", "minLength": 1 },
+          "target": { "enum": ["lead", "trajectory", "lane_left", "lane_right"] }
+        }
+      }
+    }
+  }
+}

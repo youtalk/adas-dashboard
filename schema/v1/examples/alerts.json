@@ -1,0 +1,13 @@
+{
+  "source": "visionpilot",
+  "type": "alerts",
+  "t_ms": 812345.6,
+  "alerts": [
+    {
+      "code": "FCW",
+      "severity": "critical",
+      "text": "Brake: vehicle ahead",
+      "target": "lead"
+    }
+  ]
+}

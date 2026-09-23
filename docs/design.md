@@ -14,13 +14,13 @@ The visitor must get one sentence from the screen. The stack drives the car. If 
 
 ## 2. Roles and responsibilities
 
-| Part | Where | Who |
-|---|---|---|
-| Frontend (this repository) | `src/`, static build in `dist/` | MultiCoreWare |
-| Message schema, recordings, replay tool (this repository) | `schema/`, `recordings/`, `tools/` | Autoware Foundation side (Yutaka Kondo), ready before week 1 |
-| VisionPilot adapter, `stack` role | `vision_pilot` repository, C++ | Autoware Foundation side |
-| CARLA adapter, `vehicle` and `map` roles | this repository, `adapters/carla/`, Python | Autoware Foundation side |
-| Safety Island adapter, `supervisor` role | this repository, `adapters/safety_island/`, Python | Autoware Foundation side |
+| Part                                                      | Where                                              | Who                                                          |
+| --------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------ |
+| Frontend (this repository)                                | `src/`, static build in `dist/`                    | MultiCoreWare                                                |
+| Message schema, recordings, replay tool (this repository) | `schema/`, `recordings/`, `tools/`                 | Autoware Foundation side (Yutaka Kondo), ready before week 1 |
+| VisionPilot adapter, `stack` role                         | `vision_pilot` repository, C++                     | Autoware Foundation side                                     |
+| CARLA adapter, `vehicle` and `map` roles                  | this repository, `adapters/carla/`, Python         | Autoware Foundation side                                     |
+| Safety Island adapter, `supervisor` role                  | this repository, `adapters/safety_island/`, Python | Autoware Foundation side                                     |
 
 MultiCoreWare works only in this repository and only against the replay tool until the bench integration in week 5. Every frontend feature must run from a recording, with no hardware.
 
@@ -40,7 +40,7 @@ These decisions were taken in the design session on 2026-09-21 with mockups. The
 
 ## 4. Architecture
 
-```
+```text
 stack adapter      ──ws──┐
 vehicle adapter    ──ws──┤
 map adapter        ──ws──┼──▶  browser page (this repository)
@@ -49,18 +49,18 @@ supervisor adapter ──ws──┘
 replay tool (tools/replay.py) ──ws──▶ browser page   (development, no hardware)
 ```
 
-Four roles feed the page. Each role is a WebSocket endpoint that sends JSON text frames. The page holds the latest message of each type and draws from that. The page never sends data back, except an optional `{"type":"ping"}`.
+Four roles feed the page. Each role is a WebSocket endpoint that sends JSON text frames. The page holds the latest message of each type per endpoint and draws from that. The state is keyed per endpoint, never globally, because two endpoints send the same type. The stack and the supervisor both send `status`, and section 6.3 must tell one from the other. They both send `alerts`, and the page shows the union of the two lists. An empty list clears only the alerts of the endpoint that sent it. The page never sends data back, except an optional `{"type":"ping"}`.
 
-| Role | Sends | Example sources |
-|---|---|---|
-| `stack` | what the driving stack perceives and plans | VisionPilot, Autoware planning and perception, an end-to-end model |
-| `vehicle` | ego motion and pose | CARLA, a real vehicle CAN bridge, Autoware `kinematic_state` |
-| `map` | static lane geometry | CARLA OpenDRIVE, Lanelet2, an HD map |
-| `supervisor` | who controls the car and why | Safety Island on the Cortex-R52, Autoware MRM, a driver takeover |
+| Role         | Sends                                      | Example sources                                                    |
+| ------------ | ------------------------------------------ | ------------------------------------------------------------------ |
+| `stack`      | what the driving stack perceives and plans | VisionPilot, Autoware planning and perception, an end-to-end model |
+| `vehicle`    | ego motion and pose                        | CARLA, a real vehicle CAN bridge, Autoware `kinematic_state`       |
+| `map`        | static lane geometry                       | CARLA OpenDRIVE, Lanelet2, an HD map                               |
+| `supervisor` | who controls the car and why               | Safety Island on the Cortex-R52, Autoware MRM, a driver takeover   |
 
 One endpoint can carry more than one role. The `hello` message lists the roles that an endpoint carries. In the CES setup, the VisionPilot process on the board serves `stack`. One Python process on the CARLA host serves `vehicle`, `map` and `supervisor`.
 
-The endpoints are given in the page URL, for example `index.html?stack=ws://192.168.0.20:8090/stack&world=ws://192.168.0.1:8091/world`. If the URL names no endpoint, the page reads `config.json` next to `index.html`. Endpoint names in the URL and in `config.json` are free. The page connects to all of them and learns the roles from `hello`.
+The page reads `config.json` next to `index.html`. The page URL overrides it key by key (section 7), for example `index.html?stack=ws://192.168.0.20:8090/stack&world=ws://192.168.0.1:8091/world`. Endpoint names in the URL and in `config.json` are free. The page connects to all of them and learns the roles from `hello`.
 
 ## 5. Message schema
 
@@ -79,87 +79,203 @@ The schema is versioned. JSON Schema files live in `schema/v1/`. The page reject
 `hello`, sent once right after the connection opens:
 
 ```json
-{"source": "visionpilot", "type": "hello", "t_ms": 0,
- "schema": 1, "roles": ["stack"], "name": "VisionPilot", "device": "R-Car X5H NPU"}
+{
+  "source": "visionpilot",
+  "type": "hello",
+  "t_ms": 0,
+  "schema": 1,
+  "roles": ["stack"],
+  "name": "VisionPilot",
+  "device": "R-Car X5H NPU"
+}
 ```
 
 `ego` (role `vehicle`, 10 to 50 Hz):
 
 ```json
-{"source": "carla", "type": "ego", "t_ms": 812345.6,
- "speed_mps": 11.9, "steer_rad": -0.02, "accel_mps2": 0.4,
- "pose_map": {"x": 12.3, "y": -45.6, "yaw": 1.57}}
+{
+  "source": "carla",
+  "type": "ego",
+  "t_ms": 812345.6,
+  "speed_mps": 11.9,
+  "steer_rad": -0.02,
+  "accel_mps2": 0.4,
+  "pose_map": { "x": 12.3, "y": -45.6, "yaw": 1.57 }
+}
 ```
 
 `objects` (role `stack`, every perception frame). `class` is a free string. The page has meshes for `car`, `suv`, `truck`, `bus`, `trailer`, `pedestrian`, `cyclist` and `bicycle`. Any other class is drawn as a box. `id` is stable across frames for the same object, so the page can interpolate motion and fade objects in and out. `lead` marks the closest object in the ego path. `predicted_paths?` is a list of point lists with a `confidence` each, reserved for stacks that predict motion. In schema 1 the page ignores it.
 
 ```json
-{"source": "visionpilot", "type": "objects", "t_ms": 812345.6, "frame": "ego",
- "objects": [
-   {"id": 7, "class": "car", "x": 32.1, "y": -0.3, "yaw": 0.0,
-    "length": 4.5, "width": 1.9, "height": 1.5, "lead": true, "distance_m": 32.1},
-   {"id": 9, "class": "truck", "x": 61.0, "y": 3.4, "yaw": 0.0,
-    "length": 10.0, "width": 2.4, "height": 3.2, "lead": false,
-    "predicted_paths": [{"confidence": 0.8, "pts": [[62.0, 3.4], [70.0, 3.5]]}]}
- ]}
+{
+  "source": "visionpilot",
+  "type": "objects",
+  "t_ms": 812345.6,
+  "frame": "ego",
+  "objects": [
+    {
+      "id": 7,
+      "class": "car",
+      "x": 32.1,
+      "y": -0.3,
+      "yaw": 0.0,
+      "length": 4.5,
+      "width": 1.9,
+      "height": 1.5,
+      "lead": true,
+      "distance_m": 32.1
+    },
+    {
+      "id": 9,
+      "class": "truck",
+      "x": 61.0,
+      "y": 3.4,
+      "yaw": 0.0,
+      "length": 10.0,
+      "width": 2.4,
+      "height": 3.2,
+      "lead": false,
+      "predicted_paths": [
+        {
+          "confidence": 0.8,
+          "pts": [
+            [62.0, 3.4],
+            [70.0, 3.5]
+          ]
+        }
+      ]
+    }
+  ]
+}
 ```
 
 `lanes` (role `stack`): the lane boundaries the stack perceived, as point lists. Send only the points the stack actually has. The page draws nothing beyond the last point.
 
 ```json
-{"source": "visionpilot", "type": "lanes", "t_ms": 812345.6, "frame": "ego",
- "lanes": [{"kind": "left", "pts": [[1.0, 1.7], [5.0, 1.7], [10.0, 1.68]]},
-           {"kind": "right", "pts": [[1.0, -1.7], [5.0, -1.7], [10.0, -1.72]]}]}
+{
+  "source": "visionpilot",
+  "type": "lanes",
+  "t_ms": 812345.6,
+  "frame": "ego",
+  "lanes": [
+    {
+      "kind": "left",
+      "pts": [
+        [1.0, 1.7],
+        [5.0, 1.7],
+        [10.0, 1.68]
+      ]
+    },
+    {
+      "kind": "right",
+      "pts": [
+        [1.0, -1.7],
+        [5.0, -1.7],
+        [10.0, -1.72]
+      ]
+    }
+  ]
+}
 ```
 
 `trajectory` (role `stack`): the planned path as points. A stack that plans a curve sends samples of it, for example every meter to 150 m. `behavior?` is a free string such as `lane_change_left` or `yield`, and `stop?` is a stop point with a `reason` string. Both are reserved for stacks that plan behaviors. In schema 1 the page ignores them.
 
 ```json
-{"source": "visionpilot", "type": "trajectory", "t_ms": 812345.6, "frame": "ego",
- "width_m": 2.3, "pts": [[0.5, 0.0], [1.5, 0.0], [2.5, 0.01]],
- "behavior": "keep_lane", "stop": {"x": 48.0, "y": 0.0, "reason": "traffic_light"}}
+{
+  "source": "visionpilot",
+  "type": "trajectory",
+  "t_ms": 812345.6,
+  "frame": "ego",
+  "width_m": 2.3,
+  "pts": [
+    [0.5, 0.0],
+    [1.5, 0.0],
+    [2.5, 0.01]
+  ],
+  "behavior": "keep_lane",
+  "stop": { "x": 48.0, "y": 0.0, "reason": "traffic_light" }
+}
 ```
 
 `map` (role `map`, on connect and whenever the ego moved more than 20 m, `frame` is always `map`). `features` is a list of polylines with a `kind`. The page draws `lane_solid`, `lane_dashed` and `road_edge` in schema 1 and ignores other kinds. `crosswalk`, `stop_line` and `traffic_light` are the reserved kinds for maps with such features.
 
 ```json
-{"source": "carla", "type": "map", "t_ms": 812345.6, "frame": "map", "range_m": 200,
- "features": [{"kind": "lane_dashed", "pts": [[10.0, -40.0], [20.0, -40.1]]},
-              {"kind": "stop_line", "pts": [[48.0, -42.0], [48.0, -38.0]]}]}
+{
+  "source": "carla",
+  "type": "map",
+  "t_ms": 812345.6,
+  "frame": "map",
+  "range_m": 200,
+  "features": [
+    {
+      "kind": "lane_dashed",
+      "pts": [
+        [10.0, -40.0],
+        [20.0, -40.1]
+      ]
+    },
+    {
+      "kind": "stop_line",
+      "pts": [
+        [48.0, -42.0],
+        [48.0, -38.0]
+      ]
+    }
+  ]
+}
 ```
 
 `alerts` (role `stack` or `supervisor`). The list is the full set of active alerts. An empty list clears them. `severity` is `info`, `warn` or `critical`. `text` is what the page shows. `code` is a short machine name shown in small print. `target` tells the page what to color: `lead`, `trajectory`, `lane_left`, `lane_right`, or absent.
 
 ```json
-{"source": "visionpilot", "type": "alerts", "t_ms": 812345.6,
- "alerts": [{"code": "FCW", "severity": "critical", "text": "Brake: vehicle ahead", "target": "lead"}]}
+{
+  "source": "visionpilot",
+  "type": "alerts",
+  "t_ms": 812345.6,
+  "alerts": [
+    { "code": "FCW", "severity": "critical", "text": "Brake: vehicle ahead", "target": "lead" }
+  ]
+}
 ```
 
 `control` (role `stack` or `supervisor`, 10 Hz or on change). `authority` is `stack`, `supervisor`, `driver` or `remote`. The page treats the newest `control` message from any endpoint as the truth. `driver` and `remote` get the same amber frame as `supervisor` in schema 1.
 
 ```json
-{"source": "safety_island", "type": "control", "t_ms": 523.0,
- "authority": "supervisor", "steer_rad": 0.0, "accel_mps2": -3.0}
+{
+  "source": "safety_island",
+  "type": "control",
+  "t_ms": 523.0,
+  "authority": "supervisor",
+  "steer_rad": 0.0,
+  "accel_mps2": -3.0
+}
 ```
 
 `status` (any role, 1 Hz or on change). `mode` is `active`, `standby` or `lost`. `stages` is optional per-stage latency for the status line.
 
 ```json
-{"source": "visionpilot", "type": "status", "t_ms": 812345.6,
- "name": "VisionPilot", "device": "R-Car X5H NPU", "mode": "active",
- "latency_ms": 24.7, "stages": {"pre": 1.8, "AutoDrive": 8.1, "AutoSteer": 7.2, "AutoSpeed": 6.9},
- "speed_limit_mps": 13.4}
+{
+  "source": "visionpilot",
+  "type": "status",
+  "t_ms": 812345.6,
+  "name": "VisionPilot",
+  "device": "R-Car X5H NPU",
+  "mode": "active",
+  "latency_ms": 24.7,
+  "stages": { "pre": 1.8, "AutoDrive": 8.1, "AutoSteer": 7.2, "AutoSpeed": 6.9 },
+  "speed_limit_mps": 13.4
+}
 ```
 
 ### 5.3 Rates and reconnect
 
-| Role | Typical rate | Notes |
-|---|---|---|
-| `stack` | 10 to 40 Hz | one `objects`, `lanes`, `trajectory` per perception frame |
-| `vehicle` | 10 to 50 Hz | |
-| `map` | on connect, then on movement | a message is at most 1 MB |
-| `signals` | reserved | traffic light states, not in schema 1 |
-| `supervisor` | 10 Hz | `control` and `status` |
+| Role         | Typical rate                 | Notes                                                     |
+| ------------ | ---------------------------- | --------------------------------------------------------- |
+| `stack`      | 10 to 40 Hz                  | one `objects`, `lanes`, `trajectory` per perception frame |
+| `vehicle`    | 10 to 50 Hz                  |                                                           |
+| `map`        | on connect, then on movement | a message is at most 1 MB                                 |
+| `signals`    | reserved                     | traffic light states, not in schema 1                     |
+| `supervisor` | 10 Hz                        | `control` and `status`                                    |
 
 The page reconnects to a closed endpoint with a backoff from 0.5 s to 5 s and keeps trying forever. A closed `stack` endpoint is a meaningful event (section 6.3), not an error.
 
@@ -171,18 +287,19 @@ The schema must serve stacks beyond the CES demo. That range goes from a camera-
 - A renamed field, a removed field, a changed unit or a changed frame is a breaking change. It raises `hello.schema`, and the page keeps the old version for one release.
 - Class names and feature kinds are strings with a recommended list, never a closed enumeration.
 - Schema 1 reserves `predicted_paths`, `behavior`, `stop`, the map kinds `crosswalk`, `stop_line` and `traffic_light`, the `remote` authority, and the `signals` type. An L4 adapter can send them today. The page will draw them once the frontend supports them.
+- The page ignores an unknown `type`, but the tools do not. `tools/schema.py` validates every message against the nine schema files in `schema/v1/`. It rejects a `type` that has no file, and `replay.py` and `record.py` reject it with it. To add a tenth type, add its schema file in the same commit.
 
 An Autoware stack maps onto the roles through the AD API, so the adapter does not depend on internal topics:
 
-| Role | Type | AD API source |
-|---|---|---|
-| `stack` | `objects` | `/api/perception/objects` (class, pose, size, predicted paths) |
-| `stack` | `trajectory` | `/api/planning/...` trajectory and velocity factors (`stop.reason`) |
-| `stack` | `alerts`, `status` | `/api/fail_safe/mrm_state`, `/api/operation_mode/state`, diagnostics |
-| `vehicle` | `ego` | `/api/vehicle/kinematics`, `/api/vehicle/status` |
-| `map` | `map` | Lanelet2 lane boundaries, crosswalks and stop lines around the ego |
-| `supervisor` | `control` | `/api/operation_mode/state`: `autonomous` is `stack`, `local` is `driver`, `remote` is `remote`, an MRM is `supervisor` |
-| `signals` | reserved | `/api/perception/traffic_signals` |
+| Role         | Type               | AD API source                                                                                                           |
+| ------------ | ------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `stack`      | `objects`          | `/api/perception/objects` (class, pose, size, predicted paths)                                                          |
+| `stack`      | `trajectory`       | `/api/planning/...` trajectory and velocity factors (`stop.reason`)                                                     |
+| `stack`      | `alerts`, `status` | `/api/fail_safe/mrm_state`, `/api/operation_mode/state`, diagnostics                                                    |
+| `vehicle`    | `ego`              | `/api/vehicle/kinematics`, `/api/vehicle/status`                                                                        |
+| `map`        | `map`              | Lanelet2 lane boundaries, crosswalks and stop lines around the ego                                                      |
+| `supervisor` | `control`          | `/api/operation_mode/state`: `autonomous` is `stack`, `local` is `driver`, `remote` is `remote`, an MRM is `supervisor` |
+| `signals`    | reserved           | `/api/perception/traffic_signals`                                                                                       |
 
 This adapter is a future task in `adapters/autoware/`, not part of the CES 2027 milestones.
 
@@ -206,14 +323,14 @@ Object motion is interpolated between messages by `id`. A new `id` fades in over
 
 Two independent signals decide the state: whether the `stack` endpoint is alive, and who has `control.authority`.
 
-| State | Condition | Appearance |
-|---|---|---|
-| Connecting | no endpoint has sent `hello` | dark scene and the map. A small `Waiting for vehicle...` at the bottom left. Nothing large |
-| Driving | `stack` alive, `authority = stack`, no alert above `info` | section 6.1 |
-| Alert | `stack` alive, an alert with `warn` or `critical` | see below |
-| Stack lost | `stack` endpoint closed, or `status.mode = lost` | stack layers fade to 15 percent opacity over 500 ms, pill `<stack name> lost`, camera PiP shows `camera lost` on its last frame |
-| Takeover | `authority = supervisor` | Stack lost plus an amber page frame. The pill shows the supervisor's `alerts[].text`. The speed shows a down arrow. The pedal bar shows `control.accel_mps2`. The status line shows the supervisor's `status` |
-| Stopped | Takeover and `speed_mps < 0.1` for 1 s | pill `Stopped by <supervisor name>`, frame stays amber, held until a `stack` `status.mode = active` arrives, then a 1 s fade back to Driving |
+| State      | Condition                                                 | Appearance                                                                                                                                                                                                    |
+| ---------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Connecting | no endpoint has sent `hello`                              | dark scene and the map. A small `Waiting for vehicle...` at the bottom left. Nothing large                                                                                                                    |
+| Driving    | `stack` alive, `authority = stack`, no alert above `info` | section 6.1                                                                                                                                                                                                   |
+| Alert      | `stack` alive, an alert with `warn` or `critical`         | see below                                                                                                                                                                                                     |
+| Stack lost | `stack` endpoint closed, or `status.mode = lost`          | stack layers fade to 15 percent opacity over 500 ms, pill `<stack name> lost`, camera PiP shows `camera lost` on its last frame                                                                               |
+| Takeover   | `authority = supervisor`                                  | Stack lost plus an amber page frame. The pill shows the supervisor's `alerts[].text`. The speed shows a down arrow. The pedal bar shows `control.accel_mps2`. The status line shows the supervisor's `status` |
+| Stopped    | Takeover and `speed_mps < 0.1` for 1 s                    | pill `Stopped by <supervisor name>`, frame stays amber, held until a `stack` `status.mode = active` arrives, then a 1 s fade back to Driving                                                                  |
 
 ![Alert state](mockups/02-alert.png)
 
@@ -239,25 +356,27 @@ Text in the scene uses a system sans-serif font. The pill text is at least 20 px
 
 Keyboard only, no on-screen buttons:
 
-| Key | Action |
-|---|---|
-| `c` | minimize or restore the camera PiP |
-| `t` | dark or light theme |
-| `f` | fullscreen |
-| `1` | camera preset chase (default) |
-| `2` | camera preset high |
+| Key | Action                                      |
+| --- | ------------------------------------------- |
+| `c` | minimize or restore the camera PiP          |
+| `t` | dark or light theme                         |
+| `f` | fullscreen                                  |
+| `1` | camera preset chase (default)               |
+| `2` | camera preset high                          |
 | `r` | reset state (clears Stopped, clears alerts) |
 
 `config.json`:
 
 ```json
 {
-  "endpoints": {"stack": "ws://192.168.0.20:8090/stack", "world": "ws://192.168.0.1:8091/world"},
+  "endpoints": { "stack": "ws://192.168.0.20:8090/stack", "world": "ws://192.168.0.1:8091/world" },
   "camera_url": "http://192.168.0.20:8080/",
   "units": "mph",
   "theme": "dark",
-  "camera": {"chase": {"pitch_deg": 25, "distance_m": 18, "lookahead_m": 12},
-             "high":  {"pitch_deg": 50, "distance_m": 60, "lookahead_m": 30}}
+  "camera": {
+    "chase": { "pitch_deg": 25, "distance_m": 18, "lookahead_m": 12 },
+    "high": { "pitch_deg": 50, "distance_m": 60, "lookahead_m": 30 }
+  }
 }
 ```
 
@@ -268,18 +387,19 @@ URL query parameters override `config.json` key by key.
 - Vite, TypeScript, three.js. No UI framework, no CSS framework. Node 22 LTS.
 - `npm run build` produces `dist/`, a static folder that any HTTP server can serve. `npm run dev` serves it with hot reload. `python3 -m http.server -d dist` is enough on the booth.
 - Tests with Vitest: the state machine (section 6.3) and the frame transforms (`map` to `ego`). One replay smoke test that loads a recording and makes sure that all six states are reached. No end-to-end browser tests are required.
-- Lint and format with the repository's `pre-commit` configuration (ESLint, Prettier, cspell, markdownlint). CI runs build, tests and pre-commit on every pull request.
+- Lint and format with the repository's `pre-commit` configuration: prettier, markdownlint-cli2, ruff, ruff-format, and the generic pre-commit hooks. ESLint and cspell arrive in W1, because the frontend code will then exist for cspell's word list and for ESLint to lint. CI runs build, tests and pre-commit on every pull request.
 
-```
+```text
 adas-dashboard/
 ├── docs/            design.md, mockups/
 ├── schema/v1/       JSON Schema per message type
 ├── recordings/      JSONL recordings for development
-├── tools/           replay.py, record.py (Python 3.12)
+├── tools/           replay.py, record.py, synth.py, schema.py (Python 3.12)
 ├── adapters/        carla/, safety_island/ (Python)
 ├── assets/meshes/   .glb meshes, LICENSE, convert script
 ├── src/             frontend
-└── public/          index.html, config.json
+├── index.html       page entry (Vite root)
+└── public/          config.json
 ```
 
 ## 9. Assets and licenses
@@ -290,7 +410,7 @@ Code is Apache-2.0. Recordings are CC0.
 
 ## 10. Development without hardware
 
-Before week 1, the repository holds recordings of one full run of the CES scenario from the bench: a drive on the Town04 ring, a forward collision warning, the kill of VisionPilot, the Safety Island takeover and the stop. One JSONL file per endpoint, one message per line, exactly as the endpoint sent it. `tools/replay.py` serves those files on local WebSocket ports with the original timing from `t_ms`, loops or stops at the end, and accepts `--speed`. `tools/record.py` records live endpoints into the same format.
+Before week 1, the repository holds a generated recording of one full run of the CES scenario. `tools/synth.py` generates it, and the bench recording from W5 replaces it. One JSONL file per endpoint, one message per line, exactly as the endpoint sent it. `tools/replay.py` serves those files on local WebSocket ports with the original timing from `t_ms`, loops or stops at the end, and accepts `--speed`. `tools/record.py` records live endpoints into the same format.
 
 Every frontend feature must be demonstrated on the replay before it is called done.
 
@@ -306,15 +426,15 @@ Every frontend feature must be demonstrated on the replay before it is called do
 
 Work runs from 2026-09-28 to 2026-10-30. Each week ends with something that runs. A 30 minute review on Friday fixes the plan for the next week. The tracking issue mirrors this table as a task list.
 
-| Week | Dates | Deliverable | Owner |
-|---|---|---|---|
-| W0 | 09-22 to 09-26 | repository, JSON Schema v1, recordings from the bench, `replay.py` | AWF side |
-| W1 | 09-28 to 10-02 | frontend skeleton with Vite, TypeScript and three.js. Connects to the replay. Chase camera. Road plane, map lanes and a box ego move. `hello.schema` is compared | MultiCoreWare |
-| W2 | 10-05 to 10-09 | meshes. `.glb` conversion, class to mesh, interpolation by `id`, fade in and out, dark matte material and shadow, CC BY-SA credit | MultiCoreWare |
-| W3 | 10-12 to 10-16 | perception layers and status panel. Cyan lanes, green trajectory, lead distance label, speed and limit, gap, steering and pedal, latency line. Alert state | MultiCoreWare |
-| W4 | 10-19 to 10-23 | remaining states. Connecting, Stack lost, Takeover, Stopped. Amber frame, ghosting, camera PiP `<iframe>` and `c`, theme `t`, URL configuration. The whole recording plays through every state | MultiCoreWare |
-| W2 to W4 | in parallel | VisionPilot adapter in `vision_pilot`. CARLA and Safety Island adapters here | AWF side |
-| W5 | 10-26 to 10-30 | bench integration. Live VisionPilot on the board and live adapters on the CARLA host. Kill route end to end. 60 fps next to CARLA. Camera and color values tuned on the booth monitor | both |
+| Week     | Dates          | Deliverable                                                                                                                                                                                    | Owner         |
+| -------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| W0       | 09-22 to 09-26 | repository, JSON Schema v1, a generated recording of the kill route from tools/synth.py, replay.py. The bench recording replaces the generated one in W5                                       | AWF side      |
+| W1       | 09-28 to 10-02 | frontend skeleton with Vite, TypeScript and three.js. Connects to the replay. Chase camera. Road plane, map lanes and a box ego move. `hello.schema` is compared                               | MultiCoreWare |
+| W2       | 10-05 to 10-09 | meshes. `.glb` conversion, class to mesh, interpolation by `id`, fade in and out, dark matte material and shadow, CC BY-SA credit                                                              | MultiCoreWare |
+| W3       | 10-12 to 10-16 | perception layers and status panel. Cyan lanes, green trajectory, lead distance label, speed and limit, gap, steering and pedal, latency line. Alert state                                     | MultiCoreWare |
+| W4       | 10-19 to 10-23 | remaining states. Connecting, Stack lost, Takeover, Stopped. Amber frame, ghosting, camera PiP `<iframe>` and `c`, theme `t`, URL configuration. The whole recording plays through every state | MultiCoreWare |
+| W2 to W4 | in parallel    | VisionPilot adapter in `vision_pilot`. CARLA and Safety Island adapters here                                                                                                                   | AWF side      |
+| W5       | 10-26 to 10-30 | bench integration. Live VisionPilot on the board and live adapters on the CARLA host. Kill route end to end. 60 fps next to CARLA. Camera and color values tuned on the booth monitor          | both          |
 
 ## 13. Out of scope
 

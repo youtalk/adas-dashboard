@@ -1,0 +1,8 @@
+{
+  "source": "safety_island",
+  "type": "control",
+  "t_ms": 523.0,
+  "authority": "supervisor",
+  "steer_rad": 0.0,
+  "accel_mps2": -3.0
+}

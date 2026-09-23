@@ -1,0 +1,40 @@
+{
+  "source": "visionpilot",
+  "type": "objects",
+  "t_ms": 812345.6,
+  "frame": "ego",
+  "objects": [
+    {
+      "id": 7,
+      "class": "car",
+      "x": 32.1,
+      "y": -0.3,
+      "yaw": 0.0,
+      "length": 4.5,
+      "width": 1.9,
+      "height": 1.5,
+      "lead": true,
+      "distance_m": 32.1
+    },
+    {
+      "id": 9,
+      "class": "truck",
+      "x": 61.0,
+      "y": 3.4,
+      "yaw": 0.0,
+      "length": 10.0,
+      "width": 2.4,
+      "height": 3.2,
+      "lead": false,
+      "predicted_paths": [
+        {
+          "confidence": 0.8,
+          "pts": [
+            [62.0, 3.4],
+            [70.0, 3.5]
+          ]
+        }
+      ]
+    }
+  ]
+}

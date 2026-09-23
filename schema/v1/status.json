@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/youtalk/adas-dashboard/schema/v1/status.json",
+  "title": "status",
+  "type": "object",
+  "required": ["source", "type", "t_ms", "name", "mode"],
+  "properties": {
+    "source": { "type": "string", "minLength": 1 },
+    "type": { "const": "status" },
+    "t_ms": { "type": "number" },
+    "name": { "type": "string", "minLength": 1 },
+    "device": { "type": "string" },
+    "mode": { "enum": ["active", "standby", "lost"] },
+    "latency_ms": { "type": "number", "minimum": 0 },
+    "stages": { "type": "object", "additionalProperties": { "type": "number", "minimum": 0 } },
+    "speed_limit_mps": { "type": "number", "minimum": 0 }
+  }
+}

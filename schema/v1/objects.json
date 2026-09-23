@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/youtalk/adas-dashboard/schema/v1/objects.json",
+  "title": "objects",
+  "type": "object",
+  "required": ["source", "type", "t_ms", "frame", "objects"],
+  "properties": {
+    "source": { "type": "string", "minLength": 1 },
+    "type": { "const": "objects" },
+    "t_ms": { "type": "number" },
+    "frame": { "enum": ["ego", "map"] },
+    "objects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "class", "x", "y", "yaw", "length", "width", "height"],
+        "properties": {
+          "id": { "type": "integer", "minimum": 0 },
+          "class": { "type": "string", "minLength": 1 },
+          "x": { "type": "number" },
+          "y": { "type": "number" },
+          "yaw": { "type": "number" },
+          "length": { "type": "number", "exclusiveMinimum": 0 },
+          "width": { "type": "number", "exclusiveMinimum": 0 },
+          "height": { "type": "number", "exclusiveMinimum": 0 },
+          "lead": { "type": "boolean" },
+          "distance_m": { "type": "number", "minimum": 0 },
+          "predicted_paths": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["confidence", "pts"],
+              "properties": {
+                "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+                "pts": { "$ref": "#/$defs/pts" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "pts": {
+      "type": "array",
+      "items": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 }
+    }
+  }
+}

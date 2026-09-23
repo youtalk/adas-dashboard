@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/youtalk/adas-dashboard/schema/v1/ego.json",
+  "title": "ego",
+  "type": "object",
+  "required": ["source", "type", "t_ms", "speed_mps"],
+  "properties": {
+    "source": { "type": "string", "minLength": 1 },
+    "type": { "const": "ego" },
+    "t_ms": { "type": "number" },
+    "speed_mps": { "type": "number" },
+    "steer_rad": { "type": "number" },
+    "accel_mps2": { "type": "number" },
+    "pose_map": {
+      "type": "object",
+      "required": ["x", "y", "yaw"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "yaw": { "type": "number" }
+      }
+    }
+  }
+}

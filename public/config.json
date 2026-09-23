@@ -1,0 +1,10 @@
+{
+  "endpoints": { "stack": "ws://127.0.0.1:8090/stack", "world": "ws://127.0.0.1:8091/world" },
+  "camera_url": "http://127.0.0.1:8080/",
+  "units": "mph",
+  "theme": "dark",
+  "camera": {
+    "chase": { "pitch_deg": 25, "distance_m": 18, "lookahead_m": 12 },
+    "high": { "pitch_deg": 50, "distance_m": 60, "lookahead_m": 30 }
+  }
+}

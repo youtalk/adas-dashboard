@@ -1,0 +1,13 @@
+{
+  "source": "carla",
+  "type": "ego",
+  "t_ms": 812345.6,
+  "speed_mps": 11.9,
+  "steer_rad": -0.02,
+  "accel_mps2": 0.4,
+  "pose_map": {
+    "x": 12.3,
+    "y": -45.6,
+    "yaw": 1.57
+  }
+}
