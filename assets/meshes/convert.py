@@ -3,7 +3,7 @@
 Usage: python3 assets/meshes/convert.py
 Needs: pip install -r assets/meshes/requirements.txt
 
-The meshes are by Sebastian Preusse under CC BY-SA 4.0, see LICENSE next to this file.
+The meshes are by Sebastian Preuße under CC BY-SA 4.0, see LICENSE next to this file.
 Each one is a unit cube centered at the origin, x forward and z up. The page scales it to
 the object size, so the script refuses a mesh that is not a unit cube.
 """
