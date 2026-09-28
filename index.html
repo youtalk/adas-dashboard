@@ -17,15 +17,21 @@
         color: var(--fg);
         font-family: system-ui, sans-serif;
       }
+      #scene {
+        position: fixed;
+        inset: 0;
+      }
       #status {
         position: fixed;
         left: 16px;
         bottom: 16px;
         font-size: 14px;
+        z-index: 10;
       }
     </style>
   </head>
   <body>
+    <div id="scene"></div>
     <div id="status">Waiting for vehicle...</div>
     <script type="module" src="/src/main.ts"></script>
   </body>
