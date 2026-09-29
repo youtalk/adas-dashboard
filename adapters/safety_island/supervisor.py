@@ -1,5 +1,7 @@
 """Safety Island adapter logic with no `rclpy` import, so CI can test it (design section 15)."""
 
+import math
+
 SOURCE = "safety_island"
 NAME = "Safety Island"
 DEVICE = "Cortex-R52"
@@ -37,7 +39,10 @@ def messages(
     """One loop step. cmd is the last (steer_rad, accel_mps2). prev is None on a first step."""
     control = {**_envelope("control", t_ms), "authority": auth}
     if auth == "supervisor" and cmd is not None:
-        control["steer_rad"], control["accel_mps2"] = round(cmd[0], 4), round(cmd[1], 2)
+        # A NaN or inf would make the whole message fail to encode and lose `authority`.
+        for key, value, digits in (("steer_rad", cmd[0], 4), ("accel_mps2", cmd[1], 2)):
+            if math.isfinite(value):
+                control[key] = round(value, digits)
     out = [control]
     if auth != prev or tick % STATUS_EVERY == 0:
         engaged = auth == "supervisor"

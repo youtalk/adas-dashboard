@@ -1,6 +1,6 @@
 # Safety Island adapter
 
-Serves the `supervisor` role on the `supervisor` endpoint (design section 15). It listens on DDS domain 1 to `/control/trajectory_follower/control_cmd`, the command that the arbiter acts on. The Safety Island has control while its last command is at most 0.5 s old, the same rule as the arbiter.
+Serves the `supervisor` role on the `supervisor` endpoint (design section 15). It listens on DDS domain 1 to `/control/trajectory_follower/control_cmd`, the command that the arbiter acts on. The Safety Island has control while its last command is at most 0.5 s old. This is the arbiter's 0.5 s rule, applied on the adapter's own wall clock.
 
 Build the image from the repository root:
 
@@ -8,7 +8,7 @@ Build the image from the repository root:
 
 Run it on the CARLA host with the bench DDS configuration:
 
-    docker run --rm --name dash-si --net=host \
+    docker run --rm --init --name dash-si --net=host \
       -e CARLA_BENCH_IF=enx00e04c680c75 -e CYCLONEDDS_URI=file:///dds.xml \
       -v <bench>/si/cyclonedds-bench.xml:/dds.xml:ro \
       adas-dashboard-si --stack-name VisionPilot --port 8092

@@ -27,6 +27,14 @@ def test_supervisor_step_carries_the_command_and_the_alert():
     ]
 
 
+def test_a_non_finite_command_field_is_dropped_and_authority_stays():
+    control = sv.messages(1.0, "supervisor", "stack", 3, (float("nan"), -3.0), "VisionPilot")[0]
+    schema.validate(control)
+    assert control["authority"] == "supervisor"
+    assert "steer_rad" not in control
+    assert control["accel_mps2"] == -3.0
+
+
 def test_stack_step_before_any_command():
     msgs = sv.messages(1.0, "stack", None, 0, None, "Stack")
     for m in msgs:
