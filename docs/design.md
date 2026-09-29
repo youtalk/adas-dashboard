@@ -58,7 +58,7 @@ Four roles feed the page. Each role is a WebSocket endpoint that sends JSON text
 | `map`        | static lane geometry                       | CARLA OpenDRIVE, Lanelet2, an HD map                               |
 | `supervisor` | who controls the car and why               | Safety Island on the Cortex-R52, Autoware MRM, a driver takeover   |
 
-One endpoint can carry more than one role. The `hello` message lists the roles that an endpoint carries. In the CES setup, the VisionPilot process on the board serves `stack`. One Python process on the CARLA host serves `vehicle`, `map` and `supervisor`.
+One endpoint can carry more than one role. The `hello` message lists the roles that an endpoint carries. In the CES setup, the VisionPilot process on the board serves `stack`. On the CARLA host, one Python process serves `vehicle` and `map` on the `world` endpoint, and a second one serves `supervisor` on the `supervisor` endpoint. Each has one dependency, the CARLA client or ROS 2, and one can fail while the other keeps running.
 
 The page reads `config.json` next to `index.html`. The page URL overrides it key by key (section 7), for example `index.html?stack=ws://192.168.0.20:8090/stack&world=ws://192.168.0.1:8091/world`. Endpoint names in the URL and in `config.json` are free. The page connects to all of them and learns the roles from `hello`.
 
@@ -369,7 +369,11 @@ Keyboard only, no on-screen buttons:
 
 ```json
 {
-  "endpoints": { "stack": "ws://192.168.0.20:8090/stack", "world": "ws://192.168.0.1:8091/world" },
+  "endpoints": {
+    "stack": "ws://192.168.0.20:8090/stack",
+    "world": "ws://192.168.0.1:8091/world",
+    "supervisor": "ws://192.168.0.1:8092/supervisor"
+  },
   "camera_url": "http://192.168.0.20:8080/",
   "units": "mph",
   "theme": "dark",
@@ -461,8 +465,8 @@ If all of these hold, the work is complete:
 
 For reference, not for MultiCoreWare to build.
 
-VisionPilot (`stack`): a WebSocket server in the VisionPilot process, next to the existing WebRTC stream in `modules/visualization/`, reusing Boost.Beast and nlohmann/json that are already linked. The existing `occupancy_bridge.cpp` conversion (pixels to ego frame through the homography, lane samples, path coefficients, CIPO) becomes the JSON producer. The trajectory is the path polynomial sampled every meter to 150 m. `class` is `car`, `suv` or `truck` from the same width heuristic the Occupancy view uses today. `alerts` come from `Plan::warnings` (`FCW`, `AEB`, `LLDW`, `RLDW`). `status.stages` come from the per-frame latency fields. A configuration flag makes the WebRTC stream send the raw resized camera image instead of the HUD image. The PiP then shows the camera and nothing else.
+VisionPilot (`stack`): a WebSocket server in the VisionPilot process, next to the existing WebRTC stream in `modules/visualization/`, reusing Boost.Beast and nlohmann/json that are already linked. It sends `objects`, `trajectory`, `alerts` and `status`. VisionPilot perceives no lane lines, only its planned path, so it sends no `lanes`. It does not know who controls the car, so it sends no `control`. AutoSpeed boxes go to the ground through the homography with the Occupancy view's rule. `class` is `car` or `truck` from the same width heuristic, and a nearest-neighbor tracker gives each box a stable `id`. The trajectory is the path polynomial sampled every meter to 150 m, with an empty `pts` for a frame whose fit failed. `alerts` come from `Plan::warnings`. `FCW` and `AEB` are `critical` with target `lead`. `LLDW` and `RLDW` are `info` with target `trajectory`, because lateral oscillation on the bench would otherwise keep the page in Alert. `status.stages` come from the per-frame latency fields. A configuration flag makes the WebRTC stream send the raw resized camera image instead of the HUD image. The PiP then shows the camera and nothing else.
 
-CARLA (`vehicle`, `map`): a Python client on the CARLA host. It reads the ego actor's transform and velocity and the OpenDRIVE map. It sends `ego` at 20 Hz and `map` with the lane boundaries around the ego.
+CARLA (`vehicle`, `map`): a Python client on the CARLA host that never ticks the world. It reads the ego actor's transform, velocity and acceleration once per simulation step, so `ego` goes out at the simulation rate of 10 Hz. It builds the lane boundaries from the OpenDRIVE map once and sends the part within 200 m of the ego.
 
-Safety Island (`supervisor`): a ROS 2 node on the CARLA host on DDS domain 2. It watches the CR52's `control_cmd` and the bridge's source switch. It sends `control`, `status` and `alerts`. The `hello.name` is `Safety Island`, `device` is `Cortex-R52`.
+Safety Island (`supervisor`): a ROS 2 node on the CARLA host on DDS domain 1. Domain 2 exists only inside the board and cannot be observed from outside. The node watches `/control/trajectory_follower/control_cmd`, which carries the Cortex-R52 command after the board's bridge, and applies the arbiter's rule: the Safety Island has control while its last command is at most 0.5 s old. It sends `control`, `status` and `alerts`, and it is the only source of `control`. The `hello.name` is `Safety Island`, `device` is `Cortex-R52`.

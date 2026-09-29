@@ -1,5 +1,9 @@
 {
-  "endpoints": { "stack": "ws://127.0.0.1:8090/stack", "world": "ws://127.0.0.1:8091/world" },
+  "endpoints": {
+    "stack": "ws://127.0.0.1:8090/stack",
+    "world": "ws://127.0.0.1:8091/world",
+    "supervisor": "ws://127.0.0.1:8092/supervisor"
+  },
   "camera_url": "http://127.0.0.1:8080/",
   "units": "mph",
   "theme": "dark",
