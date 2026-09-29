@@ -1,5 +1,7 @@
 """WebSocket broadcast endpoint for live dashboard adapters."""
 
+from __future__ import annotations
+
 import json
 import sys
 from collections.abc import Callable
