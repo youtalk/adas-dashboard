@@ -60,7 +60,7 @@ Four roles feed the page. Each role is a WebSocket endpoint that sends JSON text
 
 One endpoint can carry more than one role. The `hello` message lists the roles that an endpoint carries. In the CES setup, the VisionPilot process on the board serves `stack`. On the CARLA host, one Python process serves `vehicle` and `map` on the `world` endpoint, and a second one serves `supervisor` on the `supervisor` endpoint. Each has one dependency, the CARLA client or ROS 2, and one can fail while the other keeps running.
 
-The page reads `config.json` next to `index.html`. The page URL overrides it key by key (section 7), for example `index.html?stack=ws://192.168.0.20:8090/stack&world=ws://192.168.0.1:8091/world`. Endpoint names in the URL and in `config.json` are free. The page connects to all of them and learns the roles from `hello`.
+The page reads `config.json` next to `index.html`. The page URL overrides it key by key (section 7), for example `index.html?stack=ws://192.168.0.20:8090/stack&world=ws://127.0.0.1:8091/world`. Endpoint names in the URL and in `config.json` are free. The page connects to all of them and learns the roles from `hello`.
 
 ## 5. Message schema
 
@@ -371,8 +371,8 @@ Keyboard only, no on-screen buttons:
 {
   "endpoints": {
     "stack": "ws://192.168.0.20:8090/stack",
-    "world": "ws://192.168.0.1:8091/world",
-    "supervisor": "ws://192.168.0.1:8092/supervisor"
+    "world": "ws://127.0.0.1:8091/world",
+    "supervisor": "ws://127.0.0.1:8092/supervisor"
   },
   "camera_url": "http://192.168.0.20:8080/",
   "units": "mph",
