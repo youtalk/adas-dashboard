@@ -33,11 +33,10 @@ const MESH_URLS: Record<string, string> = {
   bicycle: bicycleUrl,
 };
 
-// The GLBs are unit cubes with x-forward orientation (ROS/Autoware convention).
-// trimesh converts z-up to y-up on GLTF export, so in three.js the mesh has
-// x-forward and y-up. Rotating -π/2 around Y aligns x-forward with the parent
-// group's z-forward so the vehicle faces in the right direction.
-const MESH_BASE_ROTATION_Y = -Math.PI / 2;
+// The GLBs follow GLTF convention: front face at -Z, right side at +X.
+// Rotating π around Y maps -Z → outer +Z (the outer group's forward axis),
+// so outer.rotation.y = ry then aligns the vehicle with the road heading.
+const MESH_BASE_ROTATION_Y = Math.PI;
 
 const FADE_IN_S = 0.3;
 const FADE_OUT_S = 0.5;
