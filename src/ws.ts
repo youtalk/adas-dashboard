@@ -26,29 +26,38 @@ const BACKOFF_MAX_MS = 5000;
 
 export function connectEndpoint(name: string, url: string, cb: Callbacks): void {
   let backoff = BACKOFF_MIN_MS;
-  let gotHello = false;
+  // Latches to true on a schema mismatch so reconnection stops permanently.
+  let schemaMismatch = false;
 
   function open() {
     const ws = new WebSocket(url);
-    gotHello = false;
+    let gotHello = false;
 
     ws.onopen = () => {
       backoff = BACKOFF_MIN_MS; // reset backoff on a clean connect
     };
 
     ws.onmessage = (ev: MessageEvent) => {
-      let msg: Record<string, unknown>;
+      let parsed: unknown;
       try {
-        msg = JSON.parse(ev.data as string);
+        parsed = JSON.parse(ev.data as string);
       } catch {
         return; // ignore malformed frames
       }
+      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return;
+      const msg = parsed as Record<string, unknown>;
+      if (typeof msg.type !== "string") return;
 
       if (!gotHello) {
         if (msg.type !== "hello") return; // spec: hello is sent once, right after open
-        gotHello = true;
         const hello = msg as unknown as Hello;
+        if (!Array.isArray(hello.roles)) {
+          ws.close();
+          return;
+        }
+        gotHello = true;
         if (hello.schema !== 1) {
+          schemaMismatch = true;
           cb.onSchemaMismatch(name, hello.schema);
           ws.close();
           return;
@@ -62,7 +71,7 @@ export function connectEndpoint(name: string, url: string, cb: Callbacks): void 
 
     ws.onclose = () => {
       cb.onClose(name);
-      if (gotHello === false && backoff >= BACKOFF_MAX_MS) return; // schema mismatch: stop retrying that reason, still allowed to retry connection-wise below
+      if (schemaMismatch) return; // permanent: server speaks a different schema version
       setTimeout(open, backoff);
       backoff = Math.min(backoff * 2, BACKOFF_MAX_MS);
     };

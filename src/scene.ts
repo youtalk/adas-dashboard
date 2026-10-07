@@ -25,7 +25,8 @@ export function createScene(container: HTMLElement) {
   scene.add(light);
   scene.add(new THREE.AmbientLight(0x334455, 0.4));
 
-  // Road plane: 100 m wide, 600 m long — covers the full kill-route map extent.
+  // Road plane: 100 m wide, 600 m long — wider than the kill-route map extent.
+  // Moved with the ego every frame so it stays centred under the vehicle.
   const road = new THREE.Mesh(
     new THREE.PlaneGeometry(100, 600),
     new THREE.MeshStandardMaterial({ color: 0x161d26 }), // road token from 6.5
@@ -36,8 +37,12 @@ export function createScene(container: HTMLElement) {
 
   // Placeholder ego vehicle box (W2 replaces with .glb mesh).
   // Sized roughly to a car: 4.5 m long, 1.8 m wide, 1.5 m tall.
+  // Geometry is translated so the mesh origin sits at the rear axle, matching
+  // the pose origin reported by the stack.
+  const egoGeom = new THREE.BoxGeometry(1.8, 1.5, 4.5); // width, height, length
+  egoGeom.translate(0, 0, 1.4); // shift forward so rear axle aligns with mesh origin
   const egoMesh = new THREE.Mesh(
-    new THREE.BoxGeometry(1.8, 1.5, 4.5), // width, height, length
+    egoGeom,
     new THREE.MeshStandardMaterial({ color: 0xd9d9d9 }), // ego token from 6.5
   );
   egoMesh.position.y = 0.75; // sit on the road plane
@@ -50,5 +55,5 @@ export function createScene(container: HTMLElement) {
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
-  return { scene, camera, renderer, egoMesh };
+  return { scene, camera, renderer, egoMesh, road };
 }

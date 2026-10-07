@@ -1,7 +1,14 @@
 import * as THREE from "three";
 import { fetchConfig } from "./config";
 import { connectEndpoint } from "./ws";
-import { setRoles, recordMessage, getState, latestByRole } from "./state";
+import {
+  setRoles,
+  recordMessage,
+  closeEndpoint,
+  liveEndpoints,
+  closedEndpoints,
+  latestByRole,
+} from "./state";
 import { createScene } from "./scene";
 import { createCameraController, type CameraController } from "./camera";
 import { mapToScene, yawToSceneRotation } from "./frames";
@@ -21,28 +28,35 @@ function renderStatus() {
     status.textContent = `${name}: unsupported schema ${schema}`;
     return;
   }
-  const connected = [...getState().keys()];
-  if (connected.length === 0) {
+  const live = liveEndpoints();
+  const lost = closedEndpoints();
+  if (live.length === 0 && lost.length === 0) {
     status.textContent = `Waiting for vehicle... ${pendingNames.join(", ")}`;
     return;
   }
-  status.textContent = `Connected: ${connected.join(", ")}`;
+  const parts: string[] = [];
+  if (live.length > 0) parts.push(`Connected: ${live.join(", ")}`);
+  if (lost.length > 0) parts.push(`lost: ${lost.join(", ")}`);
+  status.textContent = parts.join(" | ");
 }
 
 // --- scene bootstrap ---
 const container = document.getElementById("scene")!;
-const { scene, camera, renderer, egoMesh } = createScene(container);
+const { scene, camera, renderer, egoMesh, road } = createScene(container);
 
 let cameraController: CameraController | null = null;
 
 // Map geometry: rebuilt only when a new map message arrives (not every frame).
 const DRAWABLE_KINDS = new Set(["lane_solid", "lane_dashed", "road_edge"]);
 const mapLineMaterial = new THREE.LineBasicMaterial({ color: 0x4b5661 }); // map lanes 6.5
-const mapLines: THREE.Object3D[] = [];
+const mapLines: THREE.Line[] = [];
 let lastMapTms: number | undefined;
 
 function rebuildMapGeometry(mapMsg: MapMsg) {
-  for (const line of mapLines) scene.remove(line);
+  for (const line of mapLines) {
+    line.geometry.dispose(); // release GPU buffer before removing from scene
+    scene.remove(line);
+  }
   mapLines.length = 0;
 
   for (const feature of mapMsg.features) {
@@ -78,6 +92,10 @@ function animate() {
       egoMesh.position.x = s.x;
       egoMesh.position.z = s.z;
       egoMesh.rotation.y = yawToSceneRotation(yaw);
+
+      // Road plane follows ego so it always covers the area around the vehicle.
+      road.position.x = s.x;
+      road.position.z = s.z;
 
       cameraController?.update(s.x, egoMesh.position.y, s.z, yaw);
 
@@ -118,7 +136,8 @@ fetchConfig()
         onMessage: (n, msg) => {
           recordMessage(n, msg);
         },
-        onClose: () => {
+        onClose: (n) => {
+          closeEndpoint(n);
           renderStatus();
         },
       });
@@ -127,5 +146,3 @@ fetchConfig()
   .catch((e: unknown) => {
     status.textContent = `config.json not loaded: ${String(e)}`;
   });
-
-(window as unknown as { getState: typeof getState }).getState = getState;
