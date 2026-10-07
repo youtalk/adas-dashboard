@@ -39,6 +39,6 @@ The page reads `public/config.json`, which points at those two ports. Add `?stac
 
 ## License
 
-Code is Apache-2.0, see [LICENSE](LICENSE). The vehicle meshes arrive in W2 in `assets/meshes/`, which does not exist yet. They will come from [autoware_perception_rviz_plugin](https://github.com/autowarefoundation/autoware_rviz_plugins/tree/main/autoware_perception_rviz_plugin), by Sebastian Preuße under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). Recordings in `recordings/` are CC0.
+Code is Apache-2.0, see [LICENSE](LICENSE). The vehicle meshes in `assets/meshes/` come from [autoware_perception_rviz_plugin](https://github.com/autowarefoundation/autoware_rviz_plugins/tree/main/autoware_perception_rviz_plugin), by Sebastian Preuße under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). The license text is in `assets/meshes/LICENSE`. `python3 assets/meshes/convert.py` converts them from COLLADA again. Recordings in `recordings/` are CC0.
 
 Every commit needs a DCO sign-off (`git commit -s`).
