@@ -12,11 +12,13 @@ import {
 import { createScene } from "./scene";
 import { createCameraController, type CameraController } from "./camera";
 import { mapToScene, yawToSceneRotation } from "./frames";
+import { ObjectManager, type RawObject } from "./objects";
 
 type PoseMap = { x: number; y: number; yaw: number };
 type EgoMsg = { pose_map?: PoseMap; speed_mps: number };
 type MapFeature = { kind: string; pts: [number, number][] };
 type MapMsg = { features: MapFeature[]; t_ms: number };
+type ObjectsMsg = { frame: "ego" | "map"; objects: RawObject[] };
 
 const status = document.getElementById("status")!;
 const rejected = new Map<string, number>();
@@ -45,6 +47,12 @@ const container = document.getElementById("scene")!;
 const { scene, camera, renderer, egoMesh, road } = createScene(container);
 
 let cameraController: CameraController | null = null;
+
+const objManager = new ObjectManager(scene);
+// Load meshes in the background; manager silently skips updates until ready.
+objManager.load().catch((e: unknown) => {
+  console.warn("mesh load failed:", e);
+});
 
 // Map geometry: rebuilt only when a new map message arrives (not every frame).
 const DRAWABLE_KINDS = new Set(["lane_solid", "lane_dashed", "road_edge"]);
@@ -79,8 +87,14 @@ function rebuildMapGeometry(mapMsg: MapMsg) {
   }
 }
 
+let lastTime: number | null = null;
+
 function animate() {
   requestAnimationFrame(animate);
+
+  const now = performance.now() / 1000;
+  const dt = lastTime !== null ? now - lastTime : 0;
+  lastTime = now;
 
   const rawEgo = latestByRole("vehicle", "ego");
   if (rawEgo) {
@@ -99,6 +113,13 @@ function animate() {
 
       cameraController?.update(s.x, egoMesh.position.y, s.z, yaw);
 
+      // Update detected objects.
+      const rawObjects = latestByRole("stack", "objects");
+      if (rawObjects) {
+        const om = rawObjects as unknown as ObjectsMsg;
+        objManager.update(om.objects, om.frame, s.x, s.z, yaw);
+      }
+
       // Rebuild map geometry when a new map message arrives and ego pose is known.
       const rawMap = latestByRole("map", "map");
       if (rawMap) {
@@ -111,6 +132,7 @@ function animate() {
     }
   }
 
+  objManager.tick(dt);
   renderer.render(scene, camera);
 }
 animate();
@@ -138,6 +160,7 @@ fetchConfig()
         },
         onClose: (n) => {
           closeEndpoint(n);
+          objManager.clear();
           renderStatus();
         },
       });

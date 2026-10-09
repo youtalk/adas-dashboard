@@ -28,11 +28,34 @@
         font-size: 14px;
         z-index: 10;
       }
+      #credit {
+        position: fixed;
+        right: 16px;
+        bottom: 16px;
+        font-size: 11px;
+        opacity: 0.45;
+        z-index: 10;
+      }
+      #credit a {
+        color: inherit;
+      }
     </style>
   </head>
   <body>
     <div id="scene"></div>
     <div id="status">Waiting for vehicle...</div>
+    <div id="credit">
+      Vehicle meshes:
+      <a
+        href="https://github.com/autowarefoundation/autoware_rviz_plugins"
+        target="_blank"
+        rel="noopener"
+        >Sebastian Preuße</a
+      >,
+      <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener"
+        >CC BY-SA 4.0</a
+      >
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
