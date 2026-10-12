@@ -40,3 +40,14 @@ export function latestByRole(role: string, type: string): Record<string, unknown
   }
   return undefined;
 }
+
+// Return the latest message of a given type from EVERY endpoint carrying a role.
+// Used for alerts: the page shows the union of alert lists from all endpoints
+// (design section 4: "The page shows the union of the lists from all endpoints").
+export function allByRole(role: string, type: string): Record<string, unknown>[] {
+  const results: Record<string, unknown>[] = [];
+  for (const s of store.values()) {
+    if (s.roles.includes(role) && s.latest[type]) results.push(s.latest[type]);
+  }
+  return results;
+}
