@@ -53,18 +53,20 @@ function renderStatus() {
   if (rejected.size > 0) {
     const [name, schema] = [...rejected.entries()][0];
     status.textContent = `${name}: unsupported schema ${schema}`;
+    status.hidden = false;
     return;
   }
   const live = liveEndpoints();
   const lost = closedEndpoints();
   if (live.length === 0 && lost.length === 0) {
+    // No endpoints connected yet — show waiting message, hide HUD.
     status.textContent = `Waiting for vehicle... ${pendingNames.join(", ")}`;
+    status.hidden = false;
     return;
   }
-  const parts: string[] = [];
-  if (live.length > 0) parts.push(`Connected: ${live.join(", ")}`);
-  if (lost.length > 0) parts.push(`lost: ${lost.join(", ")}`);
-  status.textContent = parts.join(" | ");
+  // At least one endpoint is live: HUD panel shows the relevant detail.
+  // Hide the status overlay so it does not overlap the HUD.
+  status.hidden = true;
 }
 
 // --- scene bootstrap ---
