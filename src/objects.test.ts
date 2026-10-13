@@ -76,51 +76,51 @@ describe("ObjectManager fade", () => {
     mgr.update([makeObj(1)], "map", 0, 0, 0);
     const tracked = (mgr as unknown as { tracked: Map<number, { opacity: number }> }).tracked;
 
-    mgr.tick(0.15); // half of fade-in
+    mgr.tick(0.15, 0, 0, 0); // half of fade-in
     expect(tracked.get(1)!.opacity).toBeCloseTo(0.5, 1);
 
-    mgr.tick(0.15); // full fade-in
+    mgr.tick(0.15, 0, 0, 0); // full fade-in
     expect(tracked.get(1)!.opacity).toBeCloseTo(1, 1);
   });
 
   it("fades out and removes the object after FADE_OUT_S = 0.5 s", () => {
     mgr.update([makeObj(1)], "map", 0, 0, 0);
-    mgr.tick(0.3); // fully faded in
+    mgr.tick(0.3, 0, 0, 0); // fully faded in
 
     mgr.update([], "map", 0, 0, 0); // object gone
-    mgr.tick(0.25); // half of fade-out
+    mgr.tick(0.25, 0, 0, 0); // half of fade-out
     const tracked = (mgr as unknown as { tracked: Map<number, { opacity: number }> }).tracked;
     expect(tracked.get(1)!.opacity).toBeCloseTo(0.5, 1);
 
-    mgr.tick(0.25); // full fade-out
+    mgr.tick(0.25, 0, 0, 0); // full fade-out
     expect(tracked.has(1)).toBe(false);
     expect(scene.children.length).toBe(0);
   });
 
   it("stackLost fades objects to 15% opacity and holds them", () => {
     mgr.update([makeObj(1)], "map", 0, 0, 0);
-    mgr.tick(0.3); // fully faded in
+    mgr.tick(0.3, 0, 0, 0); // fully faded in
 
     mgr.stackLost();
-    mgr.tick(0.5); // enough time to reach 15%
+    mgr.tick(0.5, 0, 0, 0); // enough time to reach 15%
 
     const tracked = (mgr as unknown as { tracked: Map<number, { opacity: number }> }).tracked;
     expect(tracked.get(1)!.opacity).toBeCloseTo(0.15, 2);
 
-    mgr.tick(1.0); // further ticks must not go below 15%
+    mgr.tick(1.0, 0, 0, 0); // further ticks must not go below 15%
     expect(tracked.get(1)!.opacity).toBeCloseTo(0.15, 2);
     expect(tracked.has(1)).toBe(true); // object stays in scene
   });
 
   it("unfreezes and resumes normal tracking when object reappears after stackLost", () => {
     mgr.update([makeObj(1)], "map", 0, 0, 0);
-    mgr.tick(0.3);
+    mgr.tick(0.3, 0, 0, 0);
     mgr.stackLost();
-    mgr.tick(0.5);
+    mgr.tick(0.5, 0, 0, 0);
 
     // Stack reconnects and sends the object again.
     mgr.update([makeObj(1)], "map", 0, 0, 0);
-    mgr.tick(0.3);
+    mgr.tick(0.3, 0, 0, 0);
 
     const tracked = (mgr as unknown as { tracked: Map<number, { opacity: number }> }).tracked;
     expect(tracked.get(1)!.opacity).toBeCloseTo(1, 1);

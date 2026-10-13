@@ -158,7 +158,7 @@ function animate() {
     }
   }
 
-  objManager.tick(dt);
+  objManager.tick(dt, egoSceneX, egoSceneZ, egoRawYaw);
   renderer.render(scene, camera);
 }
 animate();

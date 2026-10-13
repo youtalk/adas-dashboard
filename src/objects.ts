@@ -51,7 +51,11 @@ const LEAD_COLOR = 0xef4444;
 // Shared geometry for unknown-class fallback boxes (design section 6.2).
 const BOX_GEOM = new THREE.BoxGeometry(1, 1, 1);
 
-type Pose = { x: number; z: number; ry: number };
+// Ego-frame record: raw detector position used to re-derive scene pose each
+// frame with the current ego pose, so objects track the moving ego correctly.
+type EgoRecord = { ox: number; oy: number; oyaw: number; atMs: number };
+// Map-frame record: scene position is fixed in world space between messages.
+type SceneRecord = { x: number; z: number; ry: number; atMs: number };
 
 type Entry = {
   outer: THREE.Group;
@@ -62,8 +66,9 @@ type Entry = {
   frozen: boolean; // Stack lost: fades to STACK_LOST_OPACITY and holds
   opacity: number;
   isLead: boolean;
-  prev: { pose: Pose; atMs: number } | null;
-  curr: { pose: Pose; atMs: number } | null;
+  frame: "ego" | "map";
+  prev: EgoRecord | SceneRecord | null;
+  curr: EgoRecord | SceneRecord | null;
 };
 
 function wrapAngle(a: number): number {
@@ -205,6 +210,7 @@ export class ObjectManager {
       frozen: false,
       opacity: 0,
       isLead,
+      frame: "map", // overwritten by update() on first message
       prev: null,
       curr: null,
     };
@@ -220,16 +226,13 @@ export class ObjectManager {
     if (!this.ready) return;
 
     const activeIds = new Set(objects.map((o) => o.id));
+    const nowMs = performance.now();
 
     for (const obj of objects) {
-      const pose: Pose =
-        frame === "ego"
-          ? egoToScene(obj.x, obj.y, obj.yaw, egoSceneX, egoSceneZ, egoYaw)
-          : { x: obj.y, z: obj.x, ry: obj.yaw };
-
       let entry = this.tracked.get(obj.id);
       if (!entry) {
         entry = this.buildEntry(obj);
+        entry.frame = frame;
         this.scene.add(entry.outer);
         this.tracked.set(obj.id, entry);
       }
@@ -245,10 +248,16 @@ export class ObjectManager {
         for (const mat of entry.mats) mat.color.setHex(color);
       }
 
-      // Record pose for interpolation in tick().
-      const nowMs = performance.now();
+      // Store the record type that matches the frame so tick() can interpolate
+      // correctly. Ego-frame records keep raw detector coords; tick() applies
+      // egoToScene with the live ego pose each frame so objects track the ego
+      // even between 10 Hz message arrivals.
       entry.prev = entry.curr;
-      entry.curr = { pose, atMs: nowMs };
+      if (frame === "ego") {
+        entry.curr = { ox: obj.x, oy: obj.y, oyaw: obj.yaw, atMs: nowMs } as EgoRecord;
+      } else {
+        entry.curr = { x: obj.y, z: obj.x, ry: obj.yaw, atMs: nowMs } as SceneRecord;
+      }
       entry.fadingOut = false;
       entry.frozen = false;
     }
@@ -258,7 +267,7 @@ export class ObjectManager {
     }
   }
 
-  tick(dt: number): void {
+  tick(dt: number, egoSceneX: number, egoSceneZ: number, egoYaw: number): void {
     const nowMs = performance.now();
 
     for (const [id, entry] of this.tracked) {
@@ -283,23 +292,51 @@ export class ObjectManager {
         entry.opacity = Math.min(1, entry.opacity + dt / FADE_IN_S);
       }
 
-      // Interpolate position between the last two received poses.
+      // Interpolate position between the last two received poses and apply.
       if (entry.curr) {
-        let x = entry.curr.pose.x;
-        let z = entry.curr.pose.z;
-        let ry = entry.curr.pose.ry;
+        let x: number;
+        let z: number;
+        let ry: number;
 
-        if (entry.prev) {
-          const interval = entry.curr.atMs - entry.prev.atMs;
-          if (interval > 0) {
-            // Display lags by one interval so the transition from prev→curr
-            // plays out smoothly between message arrivals.
-            const alpha = Math.max(0, Math.min(1, (nowMs - interval - entry.prev.atMs) / interval));
-            x = entry.prev.pose.x + alpha * (entry.curr.pose.x - entry.prev.pose.x);
-            z = entry.prev.pose.z + alpha * (entry.curr.pose.z - entry.prev.pose.z);
-            ry = wrapAngle(
-              entry.prev.pose.ry + alpha * wrapAngle(entry.curr.pose.ry - entry.prev.pose.ry),
-            );
+        if (entry.frame === "ego") {
+          const curr = entry.curr as EgoRecord;
+          let ox = curr.ox;
+          let oy = curr.oy;
+          let oyaw = curr.oyaw;
+
+          if (entry.prev) {
+            const prev = entry.prev as EgoRecord;
+            const interval = curr.atMs - prev.atMs;
+            if (interval > 0) {
+              const alpha = Math.min(1, Math.max(0, (nowMs - curr.atMs) / interval));
+              ox = prev.ox + alpha * (curr.ox - prev.ox);
+              oy = prev.oy + alpha * (curr.oy - prev.oy);
+              oyaw = wrapAngle(prev.oyaw + alpha * wrapAngle(curr.oyaw - prev.oyaw));
+            }
+          }
+
+          // Re-derive scene pose from live ego position every frame — this is
+          // what prevents the oscillation: the world-space result updates at
+          // 60 Hz even though object messages arrive at 10 Hz.
+          const p = egoToScene(ox, oy, oyaw, egoSceneX, egoSceneZ, egoYaw);
+          x = p.x;
+          z = p.z;
+          ry = p.ry;
+        } else {
+          const curr = entry.curr as SceneRecord;
+          x = curr.x;
+          z = curr.z;
+          ry = curr.ry;
+
+          if (entry.prev) {
+            const prev = entry.prev as SceneRecord;
+            const interval = curr.atMs - prev.atMs;
+            if (interval > 0) {
+              const alpha = Math.min(1, Math.max(0, (nowMs - curr.atMs) / interval));
+              x = prev.x + alpha * (curr.x - prev.x);
+              z = prev.z + alpha * (curr.z - prev.z);
+              ry = wrapAngle(prev.ry + alpha * wrapAngle(curr.ry - prev.ry));
+            }
           }
         }
 
