@@ -240,9 +240,11 @@ function animate() {
   alertPill.setAlerts(activeAlerts);
 
   // Apply alert targets to scene objects.
+  // A "lead" alert also reddens the trajectory: the planned path leads to
+  // the vehicle causing the collision warning (design §6.3).
   const targets = new Set(activeAlerts.map((a) => a.target).filter(Boolean) as string[]);
   objManager.setLeadAlert(targets.has("lead"));
-  trajectory.setAlert(targets.has("trajectory"));
+  trajectory.setAlert(targets.has("trajectory") || targets.has("lead"));
   laneManager.setAlertKind(
     targets.has("lane_left") ? "left" : targets.has("lane_right") ? "right" : null,
   );
