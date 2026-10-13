@@ -251,7 +251,11 @@ function animate() {
   const rawStatus = latestByRole("stack", "status") as unknown as StatusMsg | undefined;
   const limitMps = rawStatus?.speed_limit_mps ?? null;
   const statusLine = rawStatus
-    ? [rawStatus.name, rawStatus.latency_ms != null ? `${rawStatus.latency_ms} ms` : null, rawStatus.device]
+    ? [
+        rawStatus.name,
+        rawStatus.latency_ms != null ? `${rawStatus.latency_ms} ms` : null,
+        rawStatus.device,
+      ]
         .filter(Boolean)
         .join(" · ")
     : "";
