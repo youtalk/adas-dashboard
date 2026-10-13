@@ -14,13 +14,23 @@ type PillState = "idle" | "active" | "holding";
 const HOLD_S = 0.5;
 
 export class AlertPill {
-  private el = document.getElementById("alert-pill") as HTMLElement;
-  private textEl = document.getElementById("alert-pill-text") as HTMLElement;
-  private codeEl = document.getElementById("alert-pill-code") as HTMLElement;
+  private el: HTMLElement;
+  private textEl: HTMLElement;
+  private codeEl: HTMLElement;
   private pillState: PillState = "idle";
   private severity: AlertSeverity = "warn";
   private holdTimer = 0;
   private pulseTime = 0;
+
+  constructor(
+    el: HTMLElement = document.getElementById("alert-pill") as HTMLElement,
+    textEl: HTMLElement = document.getElementById("alert-pill-text") as HTMLElement,
+    codeEl: HTMLElement = document.getElementById("alert-pill-code") as HTMLElement,
+  ) {
+    this.el = el;
+    this.textEl = textEl;
+    this.codeEl = codeEl;
+  }
 
   // Show the highest-severity alert from the active list.
   // Call with an empty array to clear.
