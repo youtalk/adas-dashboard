@@ -1,7 +1,6 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
-// Vite resolves these to content-hashed URLs and includes them in the build.
 import carUrl from "../assets/meshes/car.glb?url";
 import suvUrl from "../assets/meshes/suv.glb?url";
 import truckUrl from "../assets/meshes/truck.glb?url";
@@ -20,6 +19,8 @@ export type RawObject = {
   length: number;
   width: number;
   height: number;
+  lead?: boolean;
+  distance_m?: number;
 };
 
 const MESH_URLS: Record<string, string> = {
@@ -33,75 +34,45 @@ const MESH_URLS: Record<string, string> = {
   bicycle: bicycleUrl,
 };
 
-// The GLBs were exported by trimesh as unit cubes with Z up and the vehicle's
-// front at +X (verified on car.glb). Every footprint is square, so the long
-// axis cannot be auto-detected; the orientation is set explicitly instead:
-//   rotation.x = -π/2 : model +Z (up)    → +Y
-//   rotation.y = -π/2 : model +X (front) → +Z (outer group's forward axis)
-const DEFAULT_PITCH_FIX = -Math.PI / 2;
-const DEFAULT_YAW_FIX = -Math.PI / 2;
-
-// Per-class overrides, only needed if some GLB uses a different convention.
-//   pitch: 0 → model is already Y-up; Math.PI / 2 → comes out upside down
-//   yaw:   Math.PI / 2 → front was at -X; 0 → front at +Z; Math.PI → front at -Z
-const PITCH_FIX_OVERRIDE: Partial<Record<string, number>> = {
-  // e.g. pedestrian: 0,
-};
-const YAW_FIX_OVERRIDE: Partial<Record<string, number>> = {
-  // e.g. bus: Math.PI / 2,
-};
-
-// Classes whose model ends up facing backwards after alignment.
-// Add a class here only if that vehicle drives "rear-first".
-const FLIP_180 = new Set<string>([
-  // e.g. "truck",
-]);
-
-// Set to true to draw a red arrow on each object showing its heading (+Z of
-// the outer group). Useful to tell mesh-orientation issues from yaw-data issues.
-const DEBUG_HEADING_ARROWS = false;
-
-// Logs one line per object when it first appears (raw yaw vs computed scene yaw).
-const DEBUG_YAW_LOG = false;
-
-// --- Object yaw interpretation -------------------------------------------
-// +1: yaw is counter-clockwise (toward +y / left), matching the ego frame.
-// -1: yaw is clockwise. Flip this if objects skew AWAY from the lane's curve.
-const OBJECT_YAW_SIGN = 1;
-
-// false: in "ego" frame, object yaw is relative to the ego heading (egoYaw is added).
-// true:  object yaw is already absolute (map frame); egoYaw is NOT added.
-// Flip this if every object is skewed by about the same angle as the ego's heading.
-const OBJECT_YAW_IS_ABSOLUTE = false;
-
-// 0 = no smoothing, closer to 1 = smoother but laggier. Removes detector jitter.
-const YAW_SMOOTHING = 0.7;
+// GLBs are Z-up, +X-forward (trimesh export). Two-step fix:
+//   Rx(-π/2): Z-up → Y-up
+//   Ry(-π/2): +X-forward → +Z-forward (outer group's forward axis)
+const PITCH_FIX = -Math.PI / 2;
+const YAW_FIX = -Math.PI / 2;
 
 const FADE_IN_S = 0.3;
 const FADE_OUT_S = 0.5;
+const STACK_LOST_OPACITY = 0.15;
 
-// Dark matte material token (design section 6.5).
-const OBJECT_COLOR = 0x2a3540;
+// Design section 6.5: traffic blue, lead red.
+const TRAFFIC_COLOR = 0x3b82f6;
+const LEAD_COLOR = 0xef4444;
+
+// Shared geometry for unknown-class fallback boxes (design section 6.2).
+const BOX_GEOM = new THREE.BoxGeometry(1, 1, 1);
+
+type Pose = { x: number; z: number; ry: number };
 
 type Entry = {
-  outer: THREE.Group; // positioned + rotated by pose, scaled to object dims
-  inner: THREE.Object3D; // cloned normalized template or fallback box
-  mats: THREE.MeshStandardMaterial[]; // per-object clones for opacity
+  outer: THREE.Group;
+  inner: THREE.Object3D;
+  mats: THREE.MeshStandardMaterial[];
+  meshes: THREE.Mesh[];
   fadingOut: boolean;
+  frozen: boolean; // Stack lost: fades to STACK_LOST_OPACITY and holds
   opacity: number;
-  ry: number | null; // smoothed scene yaw; null until first pose
+  isLead: boolean;
+  prev: { pose: Pose; atMs: number } | null;
+  curr: { pose: Pose; atMs: number } | null;
 };
 
-// Wrap an angle to (-π, π].
 function wrapAngle(a: number): number {
   return Math.atan2(Math.sin(a), Math.cos(a));
 }
 
-// 1. Pitch the model upright (Z-up → Y-up).
-// 2. Yaw it so its front faces +Z (the outer group's forward axis).
-// 3. Center it at the origin and scale it to a unit cube, so the outer group's
-//    (width, height, length) scale maps exactly onto the object's dimensions.
-function normalizeTemplate(
+// Normalises a GLB model to a unit cube facing +Z.
+// Exported so main.ts can reuse it for the ego car mesh.
+export function normalizeTemplate(
   model: THREE.Object3D,
   pitch: number,
   yaw: number,
@@ -120,7 +91,6 @@ function normalizeTemplate(
   const box = new THREE.Box3().setFromObject(oriented);
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
-  // Centered at origin; after unit scaling the bottom sits at y = -0.5.
   oriented.position.sub(center);
 
   const unit = new THREE.Group();
@@ -134,7 +104,7 @@ function normalizeTemplate(
 }
 
 // Convert a position in ego frame to scene (x, z) and scene rotation.y.
-// Ego frame: x-forward, y-left.  Scene frame: x = ego-y, z = ego-x (mapToScene).
+// Ego frame: x-forward, y-left.  Scene frame: x = ego-y, z = ego-x.
 export function egoToScene(
   ox: number,
   oy: number,
@@ -145,13 +115,10 @@ export function egoToScene(
 ): { x: number; z: number; ry: number } {
   const c = Math.cos(egoYaw);
   const s = Math.sin(egoYaw);
-  // Rotate ego-relative (ox, oy) by egoYaw to get map offset, then apply mapToScene.
-  // map_x = egoMapX + ox*c - oy*s   → scene.z = map_x
-  // map_y = egoMapY + ox*s + oy*c   → scene.x = map_y
   return {
     x: egoSceneX + ox * s + oy * c,
     z: egoSceneZ + ox * c - oy * s,
-    ry: (OBJECT_YAW_IS_ABSOLUTE ? 0 : egoYaw) + OBJECT_YAW_SIGN * oyaw,
+    ry: egoYaw + oyaw,
   };
 }
 
@@ -169,24 +136,25 @@ export class ObjectManager {
     const loader = new GLTFLoader();
     await Promise.all(
       Object.entries(MESH_URLS).map(async ([name, url]) => {
-        const gltf = await loader.loadAsync(url);
-        const pitch = PITCH_FIX_OVERRIDE[name] ?? DEFAULT_PITCH_FIX;
-        const yaw = YAW_FIX_OVERRIDE[name] ?? DEFAULT_YAW_FIX;
-        this.templates.set(name, normalizeTemplate(gltf.scene, pitch, yaw, FLIP_180.has(name)));
+        try {
+          const gltf = await loader.loadAsync(url);
+          this.templates.set(name, normalizeTemplate(gltf.scene, PITCH_FIX, YAW_FIX, false));
+        } catch (e) {
+          console.warn(`mesh ${name} failed to load, will draw a box:`, e);
+        }
       }),
     );
     this.ready = true;
   }
 
   private selectTemplate(cls: string, height: number, length: number): THREE.Group | null {
-    // A car with a tall silhouette (SUV proportions) uses the SUV mesh.
     const key = cls === "car" && height / length > 0.36 ? "suv" : cls;
     return this.templates.get(key) ?? null;
   }
 
-  private makeMaterial(): THREE.MeshStandardMaterial {
+  private makeMaterial(color: number): THREE.MeshStandardMaterial {
     return new THREE.MeshStandardMaterial({
-      color: OBJECT_COLOR,
+      color,
       roughness: 0.85,
       metalness: 0.1,
       transparent: true,
@@ -195,54 +163,53 @@ export class ObjectManager {
   }
 
   private buildEntry(obj: RawObject): Entry {
+    const isLead = obj.lead ?? false;
+    const color = isLead ? LEAD_COLOR : TRAFFIC_COLOR;
     const mats: THREE.MeshStandardMaterial[] = [];
+    const meshes: THREE.Mesh[] = [];
     const outer = new THREE.Group();
-    // Scale outer group so the unit-cube mesh fills the object's footprint.
     outer.scale.set(obj.width, obj.height, obj.length);
 
     const template = this.selectTemplate(obj.class, obj.height, obj.length);
     let inner: THREE.Object3D;
 
     if (template) {
-      // Template is already upright, oriented (+Z forward), centered and
-      // unit-sized, so no extra rotation is applied here.
       inner = template.clone(true);
       inner.traverse((child) => {
         const m = child as THREE.Mesh;
         if (!m.isMesh) return;
-        const mat = this.makeMaterial();
+        const mat = this.makeMaterial(color);
         m.material = mat;
         m.castShadow = true;
         mats.push(mat);
+        meshes.push(m);
       });
     } else {
-      // Unknown class: plain box scaled by outer group to object dims.
-      const mat = this.makeMaterial();
-      inner = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), mat);
-      (inner as THREE.Mesh).castShadow = true;
+      const mat = this.makeMaterial(color);
+      const mesh = new THREE.Mesh(BOX_GEOM, mat);
+      mesh.castShadow = true;
+      inner = mesh;
       mats.push(mat);
+      meshes.push(mesh);
     }
 
-    // Lift inner so its bottom (y = -0.5) sits at y = 0 of the outer group.
-    // After outer scale, y = 0.5 in outer-group space becomes height/2 in world.
     inner.position.y = 0.5;
     outer.add(inner);
 
-    if (DEBUG_HEADING_ARROWS) {
-      outer.add(
-        new THREE.ArrowHelper(
-          new THREE.Vector3(0, 0, 1),
-          new THREE.Vector3(0, 1.2, 0),
-          0.8,
-          0xff4040,
-        ),
-      );
-    }
-
-    return { outer, inner, mats, fadingOut: false, opacity: 0, ry: null };
+    return {
+      outer,
+      inner,
+      mats,
+      meshes,
+      fadingOut: false,
+      frozen: false,
+      opacity: 0,
+      isLead,
+      prev: null,
+      curr: null,
+    };
   }
 
-  // Call every frame with the latest objects list and the ego's current scene pose.
   update(
     objects: RawObject[],
     frame: "ego" | "map",
@@ -255,57 +222,59 @@ export class ObjectManager {
     const activeIds = new Set(objects.map((o) => o.id));
 
     for (const obj of objects) {
-      let pos: { x: number; z: number; ry: number };
-      if (frame === "ego") {
-        pos = egoToScene(obj.x, obj.y, obj.yaw, egoSceneX, egoSceneZ, egoYaw);
-      } else {
-        // map frame: apply mapToScene directly (scene.x=y, scene.z=x)
-        pos = { x: obj.y, z: obj.x, ry: OBJECT_YAW_SIGN * obj.yaw };
-      }
+      const pose: Pose =
+        frame === "ego"
+          ? egoToScene(obj.x, obj.y, obj.yaw, egoSceneX, egoSceneZ, egoYaw)
+          : { x: obj.y, z: obj.x, ry: obj.yaw };
 
       let entry = this.tracked.get(obj.id);
       if (!entry) {
         entry = this.buildEntry(obj);
         this.scene.add(entry.outer);
         this.tracked.set(obj.id, entry);
-        if (DEBUG_YAW_LOG) {
-          const deg = (r: number) => +((r * 180) / Math.PI).toFixed(1);
-          console.log(`[ObjectManager] id=${obj.id} class=${obj.class}`, {
-            frame,
-            x: +obj.x.toFixed(2),
-            y: +obj.y.toFixed(2),
-            yawRad: obj.yaw,
-            yawDeg: deg(obj.yaw),
-            egoYawDeg: deg(egoYaw),
-            sceneRyDeg: deg(pos.ry),
-            dims: [obj.length, obj.width, obj.height],
-          });
-        }
       }
 
-      entry.outer.position.set(pos.x, 0, pos.z);
-      // Smooth along the shortest angular path so 179° → -179° doesn't spin.
-      entry.ry =
-        entry.ry === null
-          ? pos.ry
-          : wrapAngle(entry.ry + (1 - YAW_SMOOTHING) * wrapAngle(pos.ry - entry.ry));
-      entry.outer.rotation.y = entry.ry;
+      // Update scale every frame — tracker may correct dimensions mid-track.
+      entry.outer.scale.set(obj.width, obj.height, obj.length);
+
+      // Update color when lead status changes.
+      const newLead = obj.lead ?? false;
+      if (newLead !== entry.isLead) {
+        entry.isLead = newLead;
+        const color = newLead ? LEAD_COLOR : TRAFFIC_COLOR;
+        for (const mat of entry.mats) mat.color.setHex(color);
+      }
+
+      // Record pose for interpolation in tick().
+      const nowMs = performance.now();
+      entry.prev = entry.curr;
+      entry.curr = { pose, atMs: nowMs };
       entry.fadingOut = false;
+      entry.frozen = false;
     }
 
     for (const [id, entry] of this.tracked) {
-      if (!activeIds.has(id)) entry.fadingOut = true;
+      if (!activeIds.has(id) && !entry.frozen) entry.fadingOut = true;
     }
   }
 
-  // Call every frame with the elapsed time in seconds to drive fade animation.
   tick(dt: number): void {
+    const nowMs = performance.now();
+
     for (const [id, entry] of this.tracked) {
+      // Stack lost: fade toward 15% opacity and hold position.
+      if (entry.frozen) {
+        if (entry.opacity > STACK_LOST_OPACITY) {
+          entry.opacity = Math.max(STACK_LOST_OPACITY, entry.opacity - dt / FADE_OUT_S);
+        }
+        for (const mat of entry.mats) mat.opacity = entry.opacity;
+        continue;
+      }
+
       if (entry.fadingOut) {
         entry.opacity = Math.max(0, entry.opacity - dt / FADE_OUT_S);
         if (entry.opacity === 0) {
           this.scene.remove(entry.outer);
-          // Dispose per-object materials; geometry is shared from the template.
           for (const mat of entry.mats) mat.dispose();
           this.tracked.delete(id);
           continue;
@@ -313,11 +282,47 @@ export class ObjectManager {
       } else {
         entry.opacity = Math.min(1, entry.opacity + dt / FADE_IN_S);
       }
+
+      // Interpolate position between the last two received poses.
+      if (entry.curr) {
+        let x = entry.curr.pose.x;
+        let z = entry.curr.pose.z;
+        let ry = entry.curr.pose.ry;
+
+        if (entry.prev) {
+          const interval = entry.curr.atMs - entry.prev.atMs;
+          if (interval > 0) {
+            // Display lags by one interval so the transition from prev→curr
+            // plays out smoothly between message arrivals.
+            const alpha = Math.max(0, Math.min(1, (nowMs - interval - entry.prev.atMs) / interval));
+            x = entry.prev.pose.x + alpha * (entry.curr.pose.x - entry.prev.pose.x);
+            z = entry.prev.pose.z + alpha * (entry.curr.pose.z - entry.prev.pose.z);
+            ry = wrapAngle(
+              entry.prev.pose.ry + alpha * wrapAngle(entry.curr.pose.ry - entry.prev.pose.ry),
+            );
+          }
+        }
+
+        entry.outer.position.set(x, 0, z);
+        entry.outer.rotation.y = ry;
+      }
+
       for (const mat of entry.mats) mat.opacity = entry.opacity;
+      // Shadow only when the mesh is mostly visible to avoid ghost shadows.
+      const shadow = entry.opacity > 0.5;
+      for (const mesh of entry.meshes) mesh.castShadow = shadow;
     }
   }
 
-  // Remove all tracked objects immediately (e.g. on endpoint close).
+  // Freeze all tracked objects at 15% opacity (design section 6.3 Stack lost).
+  stackLost(): void {
+    for (const entry of this.tracked.values()) {
+      entry.frozen = true;
+      entry.fadingOut = false;
+    }
+  }
+
+  // Remove all tracked objects immediately (e.g. hard reset).
   clear(): void {
     for (const entry of this.tracked.values()) {
       this.scene.remove(entry.outer);
