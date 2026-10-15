@@ -31,6 +31,10 @@ export async function replaceEgoMesh(egoGroup: THREE.Group): Promise<void> {
     outer.add(template);
 
     while (egoGroup.children.length > 0) egoGroup.remove(egoGroup.children[0]);
+    // scene.ts initialises egoGroup.position.y = 0.75 for the W1 placeholder box.
+    // The GLB outer group already lifts the mesh to ground level via template.position.y,
+    // so the inherited offset must be cleared.
+    egoGroup.position.y = 0;
     egoGroup.add(outer);
   } catch (e) {
     console.warn("ego mesh load failed, keeping placeholder box:", e);

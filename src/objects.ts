@@ -263,7 +263,13 @@ export class ObjectManager {
     }
 
     for (const [id, entry] of this.tracked) {
-      if (!activeIds.has(id) && !entry.frozen) entry.fadingOut = true;
+      if (!activeIds.has(id)) {
+        // update() is only called while the stack is connected, so any id absent
+        // from the current message must fade out — including previously frozen ids
+        // that were not re-reported after a reconnect.
+        entry.frozen = false;
+        entry.fadingOut = true;
+      }
     }
   }
 
@@ -277,6 +283,8 @@ export class ObjectManager {
           entry.opacity = Math.max(STACK_LOST_OPACITY, entry.opacity - dt / FADE_OUT_S);
         }
         for (const mat of entry.mats) mat.opacity = entry.opacity;
+        const frozenShadow = entry.opacity > 0.5;
+        for (const mesh of entry.meshes) mesh.castShadow = frozenShadow;
         continue;
       }
 
@@ -308,7 +316,9 @@ export class ObjectManager {
             const prev = entry.prev as EgoRecord;
             const interval = curr.atMs - prev.atMs;
             if (interval > 0) {
-              const alpha = Math.min(1, Math.max(0, (nowMs - curr.atMs) / interval));
+              // Alpha is measured from prev so position reaches curr immediately
+              // when the message arrives, then dead-reckons forward one interval.
+              const alpha = Math.min(2, Math.max(0, (nowMs - prev.atMs) / interval));
               ox = prev.ox + alpha * (curr.ox - prev.ox);
               oy = prev.oy + alpha * (curr.oy - prev.oy);
               oyaw = wrapAngle(prev.oyaw + alpha * wrapAngle(curr.oyaw - prev.oyaw));
@@ -332,7 +342,7 @@ export class ObjectManager {
             const prev = entry.prev as SceneRecord;
             const interval = curr.atMs - prev.atMs;
             if (interval > 0) {
-              const alpha = Math.min(1, Math.max(0, (nowMs - curr.atMs) / interval));
+              const alpha = Math.min(2, Math.max(0, (nowMs - prev.atMs) / interval));
               x = prev.x + alpha * (curr.x - prev.x);
               z = prev.z + alpha * (curr.z - prev.z);
               ry = wrapAngle(prev.ry + alpha * wrapAngle(curr.ry - prev.ry));
