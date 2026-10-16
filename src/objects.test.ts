@@ -73,7 +73,7 @@ describe("ObjectManager fade", () => {
   });
 
   it("starts with opacity 0 and fades in over FADE_IN_S = 0.3 s", () => {
-    mgr.update([makeObj(1)], "map", 0, 0, 0);
+    mgr.update([makeObj(1)], "map");
     const tracked = (mgr as unknown as { tracked: Map<number, { opacity: number }> }).tracked;
 
     mgr.tick(0.15, 0, 0, 0); // half of fade-in
@@ -84,10 +84,10 @@ describe("ObjectManager fade", () => {
   });
 
   it("fades out and removes the object after FADE_OUT_S = 0.5 s", () => {
-    mgr.update([makeObj(1)], "map", 0, 0, 0);
+    mgr.update([makeObj(1)], "map");
     mgr.tick(0.3, 0, 0, 0); // fully faded in
 
-    mgr.update([], "map", 0, 0, 0); // object gone
+    mgr.update([], "map"); // object gone
     mgr.tick(0.25, 0, 0, 0); // half of fade-out
     const tracked = (mgr as unknown as { tracked: Map<number, { opacity: number }> }).tracked;
     expect(tracked.get(1)!.opacity).toBeCloseTo(0.5, 1);
@@ -98,7 +98,7 @@ describe("ObjectManager fade", () => {
   });
 
   it("stackLost fades objects to 15% opacity and holds them", () => {
-    mgr.update([makeObj(1)], "map", 0, 0, 0);
+    mgr.update([makeObj(1)], "map");
     mgr.tick(0.3, 0, 0, 0); // fully faded in
 
     mgr.stackLost();
@@ -113,13 +113,13 @@ describe("ObjectManager fade", () => {
   });
 
   it("unfreezes and resumes normal tracking when object reappears after stackLost", () => {
-    mgr.update([makeObj(1)], "map", 0, 0, 0);
+    mgr.update([makeObj(1)], "map");
     mgr.tick(0.3, 0, 0, 0);
     mgr.stackLost();
     mgr.tick(0.5, 0, 0, 0);
 
     // Stack reconnects and sends the object again.
-    mgr.update([makeObj(1)], "map", 0, 0, 0);
+    mgr.update([makeObj(1)], "map");
     mgr.tick(0.3, 0, 0, 0);
 
     const tracked = (mgr as unknown as { tracked: Map<number, { opacity: number }> }).tracked;

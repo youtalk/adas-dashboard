@@ -51,6 +51,19 @@ const LEAD_COLOR = 0xef4444;
 // Shared geometry for unknown-class fallback boxes (design section 6.2).
 const BOX_GEOM = new THREE.BoxGeometry(1, 1, 1);
 
+// Lead vehicle: alert ring geometry (unit circle lying flat, shared across all instances).
+const RING_GEOM = (() => {
+  const pts: THREE.Vector3[] = [];
+  const segs = 40;
+  for (let i = 0; i <= segs; i++) {
+    const theta = (i / segs) * Math.PI * 2;
+    pts.push(new THREE.Vector3(Math.cos(theta) * 1.2, 0, Math.sin(theta) * 1.2));
+  }
+  return new THREE.BufferGeometry().setFromPoints(pts);
+})();
+
+const LABEL_COLOR = "#ef4444"; // lead red §6.5, used in canvas text
+
 // Ego-frame record: raw detector position used to re-derive scene pose each
 // frame with the current ego pose, so objects track the moving ego correctly.
 type EgoRecord = { ox: number; oy: number; oyaw: number; atMs: number };
@@ -69,6 +82,12 @@ type Entry = {
   frame: "ego" | "map";
   prev: EgoRecord | SceneRecord | null;
   curr: EgoRecord | SceneRecord | null;
+  // Lead vehicle extras (created lazily when isLead first becomes true).
+  ring: THREE.LineLoop | null; // alert ring, child of outer
+  labelSprite: THREE.Sprite | null; // distance label, direct child of scene
+  labelCanvas: HTMLCanvasElement | null;
+  labelTexture: THREE.CanvasTexture | null;
+  lastLabelDistM: number; // track last rendered value to avoid needless redraws
 };
 
 function wrapAngle(a: number): number {
@@ -213,16 +232,15 @@ export class ObjectManager {
       frame: "map", // overwritten by update() on first message
       prev: null,
       curr: null,
+      ring: null,
+      labelSprite: null,
+      labelCanvas: null,
+      labelTexture: null,
+      lastLabelDistM: -1,
     };
   }
 
-  update(
-    objects: RawObject[],
-    frame: "ego" | "map",
-    egoSceneX: number,
-    egoSceneZ: number,
-    egoYaw: number,
-  ): void {
+  update(objects: RawObject[], frame: "ego" | "map"): void {
     if (!this.ready) return;
 
     const activeIds = new Set(objects.map((o) => o.id));
@@ -358,6 +376,75 @@ export class ObjectManager {
       // Shadow only when the mesh is mostly visible to avoid ghost shadows.
       const shadow = entry.opacity > 0.5;
       for (const mesh of entry.meshes) mesh.castShadow = shadow;
+
+      // Lead vehicle label: distance text above the vehicle.
+      if (entry.isLead && entry.curr) {
+        if (!entry.labelSprite) {
+          const canvas = document.createElement("canvas");
+          canvas.width = 128;
+          canvas.height = 48;
+          const texture = new THREE.CanvasTexture(canvas);
+          const mat = new THREE.SpriteMaterial({ map: texture, depthTest: false });
+          const sprite = new THREE.Sprite(mat);
+          sprite.scale.set(3, 1.1, 1);
+          this.scene.add(sprite);
+          entry.labelCanvas = canvas;
+          entry.labelTexture = texture;
+          entry.labelSprite = sprite;
+        }
+        // Position label 1 m above the vehicle top in world space.
+        entry.labelSprite.position.set(
+          entry.outer.position.x,
+          entry.outer.scale.y + 1,
+          entry.outer.position.z,
+        );
+        entry.labelSprite.material.opacity = entry.opacity;
+        entry.labelSprite.visible = true;
+
+        // Redraw canvas only when rounded distance changes.
+        const distM = entry.curr ? this.getDistM(entry.curr) : null;
+        const rounded = distM !== null ? Math.round(distM) : -1;
+        if (rounded !== entry.lastLabelDistM) {
+          entry.lastLabelDistM = rounded;
+          const ctx = entry.labelCanvas!.getContext("2d")!;
+          ctx.clearRect(0, 0, 128, 48);
+          if (rounded >= 0) {
+            ctx.fillStyle = LABEL_COLOR;
+            ctx.font = "bold 22px system-ui,sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(`${rounded} m`, 64, 24);
+          }
+          entry.labelTexture!.needsUpdate = true;
+        }
+      } else if (entry.labelSprite) {
+        entry.labelSprite.visible = false;
+      }
+    }
+  }
+
+  // Extract distance in meters from the entry's current record.
+  private getDistM(rec: EgoRecord | SceneRecord): number {
+    if ("ox" in rec) {
+      // ego frame: distance = hypot(x, y) of object in ego frame
+      return Math.sqrt(rec.ox * rec.ox + rec.oy * rec.oy);
+    }
+    // map frame: use scene distance from origin (approximate)
+    return Math.sqrt(rec.x * rec.x + rec.z * rec.z);
+  }
+
+  // Show or hide the alert ring on the lead vehicle (design §6.3 Alert state).
+  setLeadAlert(show: boolean): void {
+    for (const entry of this.tracked.values()) {
+      if (!entry.isLead) continue;
+      if (show && !entry.ring) {
+        const mat = new THREE.LineBasicMaterial({ color: 0xb91c1c });
+        const ring = new THREE.LineLoop(RING_GEOM, mat);
+        ring.position.y = 0.3; // just above ground in outer-local space
+        entry.outer.add(ring);
+        entry.ring = ring;
+      }
+      if (entry.ring) entry.ring.visible = show;
     }
   }
 
@@ -374,6 +461,11 @@ export class ObjectManager {
     for (const entry of this.tracked.values()) {
       this.scene.remove(entry.outer);
       for (const mat of entry.mats) mat.dispose();
+      if (entry.labelSprite) {
+        this.scene.remove(entry.labelSprite);
+        entry.labelTexture?.dispose();
+        (entry.labelSprite.material as THREE.SpriteMaterial).dispose();
+      }
     }
     this.tracked.clear();
   }
