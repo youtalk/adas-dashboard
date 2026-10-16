@@ -263,7 +263,7 @@ function animate() {
     : "";
 
   // --- lead vehicle info ---
-  const objects = rawObjects ? ((rawObjects as unknown as ObjectsMsg).objects ?? []) : [];
+  const objects = rawObjects ? (rawObjects as unknown as ObjectsMsg).objects ?? [] : [];
   const leadObj = objects.find((o) => o.lead);
   let leadDistM: number | null = null;
   let leadGapS: number | null = null;
