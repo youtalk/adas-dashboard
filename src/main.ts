@@ -143,6 +143,7 @@ function animate() {
   const now = performance.now() / 1000;
   const dt = lastTime !== null ? now - lastTime : 0;
   lastTime = now;
+  let egoPoseChanged = false;
 
   // --- ego vehicle ---
   const rawEgo = latestByRole("vehicle", "ego");
@@ -159,6 +160,7 @@ function animate() {
     if (ego.pose_map) {
       const { x, y, yaw } = ego.pose_map;
       const s = mapToScene(x, y);
+      egoPoseChanged = s.x !== egoSceneX || s.z !== egoSceneZ || yaw !== egoRawYaw;
       egoSceneX = s.x;
       egoSceneZ = s.z;
       egoRawYaw = yaw;
@@ -200,26 +202,34 @@ function animate() {
   }
 
   // --- perceived lanes ---
+  let lanesUpdated = false;
   const rawLanes = latestByRole("stack", "lanes");
   if (rawLanes) {
     const lm = rawLanes as unknown as LanesMsg;
     if (lm.t_ms !== lastLanesTms) {
       lastLanesTms = lm.t_ms;
       laneManager.setMsg(lm.lanes, lm.frame);
+      lanesUpdated = true;
     }
   }
-  laneManager.rebuild(egoSceneX, egoSceneZ, egoRawYaw);
+  if (lanesUpdated || egoPoseChanged) {
+    laneManager.rebuild(egoSceneX, egoSceneZ, egoRawYaw);
+  }
 
   // --- trajectory ---
+  let trajUpdated = false;
   const rawTraj = latestByRole("stack", "trajectory");
   if (rawTraj) {
     const tm = rawTraj as unknown as TrajMsg;
     if (tm.t_ms !== lastTrajTms) {
       lastTrajTms = tm.t_ms;
       trajectory.setMsg(tm.pts, tm.width_m, tm.frame);
+      trajUpdated = true;
     }
   }
-  trajectory.rebuild(egoSceneX, egoSceneZ, egoRawYaw);
+  if (trajUpdated || egoPoseChanged) {
+    trajectory.rebuild(egoSceneX, egoSceneZ, egoRawYaw);
+  }
 
   // --- alerts: union across all stack/supervisor endpoints ---
   const alertMsgs = [
@@ -239,12 +249,11 @@ function animate() {
 
   alertPill.setAlerts(activeAlerts);
 
-  // Apply alert targets to scene objects.
-  // A "lead" alert also reddens the trajectory: the planned path leads to
-  // the vehicle causing the collision warning (design §6.3).
-  const targets = new Set(activeAlerts.map((a) => a.target).filter(Boolean) as string[]);
+  // Apply alert targets to scene objects using the held list so the 500 ms
+  // hold also covers the ring, trajectory, and lane colors (design §6.3).
+  const targets = new Set(alertPill.held.map((a) => a.target).filter(Boolean) as string[]);
   objManager.setLeadAlert(targets.has("lead"));
-  trajectory.setAlert(targets.has("trajectory") || targets.has("lead"));
+  trajectory.setAlert(targets.has("trajectory"));
   laneManager.setAlertKind(
     targets.has("lane_left") ? "left" : targets.has("lane_right") ? "right" : null,
   );
@@ -308,6 +317,14 @@ fetchConfig()
     for (const [name, url] of Object.entries(c.endpoints)) {
       connectEndpoint(name, url, {
         onHello: (n, hello) => {
+          // Clear stale scene state so ghost objects from the previous session
+          // cannot slide to new positions if the reconnecting stack reuses ids.
+          if (hello.roles.includes("stack")) {
+            objManager.clear();
+            laneManager.clear();
+            trajectory.clear();
+            alertPill.reset();
+          }
           endpointRoles.set(n, hello.roles);
           setRoles(n, hello.roles);
           renderStatus();
@@ -323,8 +340,8 @@ fetchConfig()
           closeEndpoint(n);
           if ((endpointRoles.get(n) ?? []).includes("stack")) {
             objManager.stackLost();
-            laneManager.clear();
-            trajectory.clear();
+            laneManager.stackLost();
+            trajectory.stackLost();
           }
           renderStatus();
         },

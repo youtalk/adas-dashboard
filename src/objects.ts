@@ -310,7 +310,7 @@ export class ObjectManager {
         entry.opacity = Math.max(0, entry.opacity - dt / FADE_OUT_S);
         if (entry.opacity === 0) {
           this.scene.remove(entry.outer);
-          for (const mat of entry.mats) mat.dispose();
+          this.disposeEntry(entry);
           this.tracked.delete(id);
           continue;
         }
@@ -402,7 +402,7 @@ export class ObjectManager {
         entry.labelSprite.visible = true;
 
         // Redraw canvas only when rounded distance changes.
-        const distM = entry.curr ? this.getDistM(entry.curr) : null;
+        const distM = entry.curr ? this.getDistM(entry.curr, egoSceneX, egoSceneZ) : null;
         const rounded = distM !== null ? Math.round(distM) : -1;
         if (rounded !== entry.lastLabelDistM) {
           entry.lastLabelDistM = rounded;
@@ -424,27 +424,29 @@ export class ObjectManager {
   }
 
   // Extract distance in meters from the entry's current record.
-  private getDistM(rec: EgoRecord | SceneRecord): number {
+  private getDistM(rec: EgoRecord | SceneRecord, egoSceneX: number, egoSceneZ: number): number {
     if ("ox" in rec) {
-      // ego frame: distance = hypot(x, y) of object in ego frame
+      // ego frame: distance = hypot of raw detector position
       return Math.sqrt(rec.ox * rec.ox + rec.oy * rec.oy);
     }
-    // map frame: use scene distance from origin (approximate)
-    return Math.sqrt(rec.x * rec.x + rec.z * rec.z);
+    // map frame: measure from ego scene position, not map origin
+    const dx = rec.x - egoSceneX;
+    const dz = rec.z - egoSceneZ;
+    return Math.sqrt(dx * dx + dz * dz);
   }
 
   // Show or hide the alert ring on the lead vehicle (design §6.3 Alert state).
   setLeadAlert(show: boolean): void {
     for (const entry of this.tracked.values()) {
-      if (!entry.isLead) continue;
-      if (show && !entry.ring) {
+      if (show && entry.isLead && !entry.ring) {
         const mat = new THREE.LineBasicMaterial({ color: 0xb91c1c });
         const ring = new THREE.LineLoop(RING_GEOM, mat);
         ring.position.y = 0.3; // just above ground in outer-local space
         entry.outer.add(ring);
         entry.ring = ring;
       }
-      if (entry.ring) entry.ring.visible = show;
+      // Update every entry so rings on former leads are hidden when the lead flag moves.
+      if (entry.ring) entry.ring.visible = show && entry.isLead;
     }
   }
 
@@ -456,16 +458,23 @@ export class ObjectManager {
     }
   }
 
+  private disposeEntry(entry: Entry): void {
+    for (const mat of entry.mats) mat.dispose();
+    if (entry.labelSprite) {
+      this.scene.remove(entry.labelSprite);
+      entry.labelTexture?.dispose();
+      (entry.labelSprite.material as THREE.SpriteMaterial).dispose();
+    }
+    if (entry.ring) {
+      (entry.ring.material as THREE.LineBasicMaterial).dispose();
+    }
+  }
+
   // Remove all tracked objects immediately (e.g. hard reset).
   clear(): void {
     for (const entry of this.tracked.values()) {
       this.scene.remove(entry.outer);
-      for (const mat of entry.mats) mat.dispose();
-      if (entry.labelSprite) {
-        this.scene.remove(entry.labelSprite);
-        entry.labelTexture?.dispose();
-        (entry.labelSprite.material as THREE.SpriteMaterial).dispose();
-      }
+      this.disposeEntry(entry);
     }
     this.tracked.clear();
   }

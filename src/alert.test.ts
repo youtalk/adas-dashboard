@@ -105,6 +105,43 @@ describe("AlertPill.setAlerts — hold and clear", () => {
 // tick — critical pulse
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// held list and reset
+// ---------------------------------------------------------------------------
+
+describe("AlertPill.held and reset", () => {
+  it("held returns active alerts while active", () => {
+    const { pill } = makePill();
+    pill.setAlerts([warn, crit]);
+    expect(pill.held.length).toBe(2);
+  });
+
+  it("held returns held alerts while holding (500 ms hold not yet expired)", () => {
+    const { pill } = makePill();
+    pill.setAlerts([warn]);
+    pill.setAlerts([]); // trigger hold
+    pill.tick(0.1);
+    expect(pill.held.length).toBe(1);
+    expect(pill.held[0].code).toBe("LLDW");
+  });
+
+  it("held returns empty after hold expires", () => {
+    const { pill } = makePill();
+    pill.setAlerts([warn]);
+    pill.setAlerts([]);
+    pill.tick(0.51);
+    expect(pill.held).toEqual([]);
+  });
+
+  it("reset sets pill to idle and clears held", () => {
+    const { pill, el } = makePill();
+    pill.setAlerts([crit]);
+    pill.reset();
+    expect(pill.held).toEqual([]);
+    expect(el.hidden).toBe(true);
+  });
+});
+
 describe("AlertPill.tick — critical pulse", () => {
   it("critical alert pulses opacity between 0.3 and 1.0 over time", () => {
     const { pill, el } = makePill();

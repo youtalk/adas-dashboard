@@ -151,6 +151,26 @@ describe("TrajectoryRibbon — ego-frame tracking", () => {
 // Alert coloring
 // ---------------------------------------------------------------------------
 
+describe("TrajectoryRibbon — stackLost", () => {
+  it("stackLost sets opacity to 0.15 on the ribbon material", () => {
+    const scene = makeScene();
+    const ribbon = new TrajectoryRibbon(scene);
+    ribbon.setMsg(
+      [
+        [0, 0],
+        [10, 0],
+      ],
+      2.0,
+      "ego",
+    );
+    ribbon.rebuild(0, 0, 0);
+    ribbon.stackLost();
+    const mat = ribbonMesh(scene)!.material as THREE.MeshBasicMaterial;
+    expect(mat.transparent).toBe(true);
+    expect(mat.opacity).toBeCloseTo(0.15, 2);
+  });
+});
+
 describe("TrajectoryRibbon — alert", () => {
   it("changes material to red when setAlert(true) is called", () => {
     const scene = makeScene();

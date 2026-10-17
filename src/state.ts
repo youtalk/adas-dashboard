@@ -47,7 +47,7 @@ export function latestByRole(role: string, type: string): Record<string, unknown
 export function allByRole(role: string, type: string): Record<string, unknown>[] {
   const results: Record<string, unknown>[] = [];
   for (const s of store.values()) {
-    if (s.roles.includes(role) && s.latest[type]) results.push(s.latest[type]);
+    if (!s.closed && s.roles.includes(role) && s.latest[type]) results.push(s.latest[type]);
   }
   return results;
 }

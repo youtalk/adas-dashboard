@@ -65,8 +65,38 @@ describe("LaneManager — scene management", () => {
     const tiny: RawLane = { kind: "left", pts: [[1, 1]] };
     mgr.setMsg([tiny], "ego");
     mgr.rebuild(0, 0, 0);
-    // Line is created but draw range stays at 0 — no crash.
-    expect(laneLines(scene).length).toBe(1);
+    // Line slot is created but hidden.
+    const lines = laneLines(scene);
+    expect(lines.length).toBe(1);
+    expect(lines[0].visible).toBe(false);
+  });
+
+  it("stackLost sets opacity to 0.15 on all lines", () => {
+    mgr.setMsg([leftLane, rightLane], "ego");
+    mgr.rebuild(0, 0, 0);
+    mgr.stackLost();
+    const mats = laneLines(scene).map((l) => l.material as THREE.LineBasicMaterial);
+    for (const mat of mats) {
+      expect(mat.transparent).toBe(true);
+      expect(mat.opacity).toBeCloseTo(0.15, 2);
+    }
+  });
+
+  it("lane slot is hidden when pts has fewer than 2 points", () => {
+    const twoLane: RawLane = {
+      kind: "left",
+      pts: [
+        [0, 0],
+        [5, 0],
+      ],
+    };
+    const onePoint: RawLane = { kind: "left", pts: [[0, 0]] };
+    mgr.setMsg([twoLane], "ego");
+    mgr.rebuild(0, 0, 0);
+    expect(laneLines(scene)[0].visible).toBe(true);
+    mgr.setMsg([onePoint], "ego");
+    mgr.rebuild(0, 0, 0);
+    expect(laneLines(scene)[0].visible).toBe(false);
   });
 });
 

@@ -5,6 +5,7 @@ import { mapToScene } from "./frames";
 const TRAJ_COLOR = 0x22c55e; // green §6.5
 const ALERT_COLOR = 0xb91c1c; // alert red §6.5
 const DEFAULT_WIDTH_M = 1.9; // ego vehicle width fallback (design §5.2)
+const STACK_LOST_OPACITY = 0.15;
 const TRAJ_Y = 0.03; // just above road surface
 
 export class TrajectoryRibbon {
@@ -30,10 +31,21 @@ export class TrajectoryRibbon {
     this.rawPts = pts;
     this.rawWidthM = widthM ?? DEFAULT_WIDTH_M;
     this.frame = frame;
+    // Restore full opacity after a stackLost ghost.
+    this.mat.transparent = false;
+    this.mat.opacity = 1;
   }
 
   setAlert(isAlert: boolean): void {
     this.mat.color.setHex(isAlert ? ALERT_COLOR : TRAJ_COLOR);
+  }
+
+  // Fade the ribbon to ghost opacity (design §6.3 Stack lost).
+  stackLost(): void {
+    if (this.mesh) {
+      this.mat.transparent = true;
+      this.mat.opacity = STACK_LOST_OPACITY;
+    }
   }
 
   // Rebuild ribbon geometry with the current ego pose (called every frame for

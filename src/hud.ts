@@ -49,7 +49,7 @@ export class Hud {
     }
 
     const deg = (d.steeringRad * 180) / Math.PI;
-    (this.wheelEl as HTMLElement).style.transform = `rotate(${deg}deg)`;
+    (this.wheelEl as HTMLElement).style.transform = `rotate(${-deg}deg)`;
 
     const pct = Math.min(1, Math.abs(d.accelMps2) / ACCEL_FULL_SCALE) * 100;
     if (d.accelMps2 >= 0) {

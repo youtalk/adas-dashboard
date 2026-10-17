@@ -21,6 +21,7 @@ export class AlertPill {
   private severity: AlertSeverity = "warn";
   private holdTimer = 0;
   private pulseTime = 0;
+  private heldAlerts: ActiveAlert[] = [];
 
   constructor(
     el: HTMLElement = document.getElementById("alert-pill") as HTMLElement,
@@ -50,11 +51,27 @@ export class AlertPill {
     this.pillState = "active";
     this.holdTimer = 0;
     this.severity = top.severity;
+    this.heldAlerts = visible;
 
     this.textEl.textContent = top.text;
     this.codeEl.textContent = top.code;
     this.el.dataset.severity = top.severity;
     this.el.hidden = false;
+    this.el.style.opacity = "1";
+  }
+
+  // Currently held alert list (non-empty while active or holding, empty when idle).
+  // Use this in main.ts for target dispatching so targets also hold for 500 ms.
+  get held(): ActiveAlert[] {
+    return this.heldAlerts;
+  }
+
+  // Reset to idle immediately (call on stack reconnect).
+  reset(): void {
+    this.pillState = "idle";
+    this.heldAlerts = [];
+    this.holdTimer = 0;
+    this.el.hidden = true;
     this.el.style.opacity = "1";
   }
 
@@ -73,6 +90,7 @@ export class AlertPill {
       this.holdTimer += dt;
       if (this.holdTimer >= HOLD_S) {
         this.pillState = "idle";
+        this.heldAlerts = [];
         this.el.hidden = true;
         this.el.style.opacity = "1";
       }

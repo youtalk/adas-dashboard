@@ -6,6 +6,7 @@ export type RawLane = { kind: string; pts: [number, number][] };
 
 const LANE_COLOR = 0x22d3ee; // cyan §6.5
 const ALERT_COLOR = 0xb91c1c; // alert red §6.5
+const STACK_LOST_OPACITY = 0.15;
 
 type LaneLine = { kind: string; line: THREE.Line; capacity: number };
 
@@ -23,6 +24,12 @@ export class LaneManager {
   setMsg(lanes: RawLane[], frame: "ego" | "map"): void {
     this.rawLanes = lanes;
     this.frame = frame;
+    // Restore full opacity after a stackLost ghost.
+    for (const { line } of this.lines) {
+      const mat = line.material as THREE.LineBasicMaterial;
+      mat.transparent = false;
+      mat.opacity = 1;
+    }
   }
 
   setAlertKind(kind: string | null): void {
@@ -72,7 +79,11 @@ export class LaneManager {
       }
 
       const n = lane.pts.length;
-      if (n < 2) continue;
+      if (n < 2) {
+        entry.line.visible = false;
+        continue;
+      }
+      entry.line.visible = true;
 
       // Reallocate buffer only when size changes (avoids GPU reallocation each frame).
       if (entry.capacity !== n) {
@@ -106,6 +117,15 @@ export class LaneManager {
       posAttr.needsUpdate = true;
       entry.line.geometry.setDrawRange(0, n);
       entry.line.geometry.computeBoundingSphere();
+    }
+  }
+
+  // Fade all lane lines to ghost opacity (design §6.3 Stack lost).
+  stackLost(): void {
+    for (const { line } of this.lines) {
+      const mat = line.material as THREE.LineBasicMaterial;
+      mat.transparent = true;
+      mat.opacity = STACK_LOST_OPACITY;
     }
   }
 
