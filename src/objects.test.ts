@@ -21,9 +21,10 @@ function mockCanvas() {
 }
 
 beforeAll(() => {
-  if (typeof global.document === "undefined") {
-    // @ts-expect-error partial DOM mock for test environment
-    global.document = { createElement: (_tag: string) => mockCanvas() };
+  if (typeof (globalThis as Record<string, unknown>).document === "undefined") {
+    (globalThis as Record<string, unknown>).document = {
+      createElement: (_tag: string) => mockCanvas(),
+    };
   }
 });
 
