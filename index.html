@@ -8,6 +8,14 @@
       :root {
         --bg: #0b0f14;
         --fg: #94a3b8;
+        --lane: #22d3ee;
+        --traj: #22c55e;
+        --lead: #ef4444;
+        --alert: #b91c1c;
+        --takeover: #fb923c;
+      }
+      [hidden] {
+        display: none !important;
       }
       html,
       body {
@@ -21,12 +29,20 @@
         position: fixed;
         inset: 0;
       }
-      #status {
+      /* Bottom-left column: HUD panel on top, connection status below it */
+      #bottom-left {
         position: fixed;
         left: 16px;
         bottom: 16px;
-        font-size: 14px;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
         z-index: 10;
+      }
+      #status {
+        font-size: 13px;
+        opacity: 0.8;
       }
       #credit {
         position: fixed;
@@ -39,11 +55,284 @@
       #credit a {
         color: inherit;
       }
+
+      /* ------------------------------------------------------------------ */
+      /* Alert pill — top center (design §6.2)                               */
+      /* ------------------------------------------------------------------ */
+      #alert-pill {
+        position: fixed;
+        top: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 7px 22px;
+        border-radius: 999px;
+        white-space: nowrap;
+        z-index: 20;
+        pointer-events: none;
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+      }
+      #alert-pill-text {
+        font-size: 20px; /* design §6.5: at least 20 px at 1080p */
+        font-weight: 700;
+        letter-spacing: 0.03em;
+      }
+      #alert-pill-code {
+        font-size: 11px;
+        opacity: 0.75;
+        letter-spacing: 0.08em;
+      }
+      #alert-pill[data-severity="warn"] {
+        background: rgba(245, 158, 11, 0.15);
+        border: 1px solid #f59e0b;
+        color: #fcd34d;
+      }
+      #alert-pill[data-severity="critical"] {
+        background: rgba(185, 28, 28, 0.2);
+        border: 1px solid var(--alert);
+        color: #fca5a5;
+      }
+
+      /* ------------------------------------------------------------------ */
+      /* Status panel — bottom left (design §6.1, §6.4)                      */
+      /* ------------------------------------------------------------------ */
+      #hud {
+        width: 220px;
+        background: rgba(11, 15, 20, 0.84);
+        border: 1px solid #1e2a35;
+        border-radius: 8px;
+        padding: 12px 14px;
+        z-index: 10;
+        font-size: 13px;
+        color: var(--fg);
+      }
+
+      /* Speed + limit row */
+      .hud-speed-row {
+        display: flex;
+        align-items: flex-end;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .hud-speed-block {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      #hud-speed {
+        font-size: 46px;
+        font-weight: 800;
+        color: #e2e8f0;
+        line-height: 1;
+        letter-spacing: -1px;
+      }
+      .hud-speed-unit {
+        font-size: 12px;
+        letter-spacing: 0.06em;
+        margin-top: 2px;
+      }
+      /* Speed-limit box: small rounded badge */
+      #hud-limit-box {
+        border: 2px solid #e2e8f0;
+        border-radius: 5px;
+        padding: 3px 6px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-bottom: 2px;
+      }
+      #hud-limit {
+        font-size: 18px;
+        font-weight: 700;
+        color: #e2e8f0;
+        line-height: 1;
+      }
+      #hud-limit-unit {
+        font-size: 9px;
+        letter-spacing: 0.08em;
+        margin-top: 1px;
+      }
+
+      /* Divider between rows */
+      .hud-divider {
+        border: none;
+        border-top: 1px solid #1e2a35;
+        margin: 6px 0;
+      }
+
+      /* Lead vehicle row */
+      #hud-lead-row {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 0;
+        font-size: 12px;
+      }
+      .hud-lbl {
+        font-size: 10px;
+        letter-spacing: 0.06em;
+        opacity: 0.5;
+        min-width: 30px;
+      }
+      .hud-val {
+        color: #e2e8f0;
+        font-weight: 600;
+      }
+      .hud-unit {
+        font-size: 10px;
+        opacity: 0.6;
+      }
+
+      /* Steering wheel + pedal bar row */
+      .hud-controls-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 0;
+      }
+      #hud-wheel {
+        flex-shrink: 0;
+        color: var(--fg);
+      }
+      .hud-pedal-wrap {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .hud-pedal-label {
+        font-size: 10px;
+        letter-spacing: 0.06em;
+        opacity: 0.5;
+        margin-bottom: 3px;
+      }
+      /* Centered bi-directional pedal bar */
+      .hud-pedal-bar {
+        display: flex;
+        align-items: center;
+        height: 8px;
+        gap: 0;
+      }
+      .hud-pedal-half {
+        flex: 1;
+        height: 100%;
+        background: #1e2a35;
+        overflow: hidden;
+      }
+      .hud-pedal-half.left {
+        border-radius: 4px 0 0 4px;
+        display: flex;
+        justify-content: flex-end; /* brake fills from center outward */
+      }
+      .hud-pedal-half.right {
+        border-radius: 0 4px 4px 0;
+      }
+      .hud-pedal-center {
+        width: 2px;
+        height: 100%;
+        background: #4b5661;
+        flex-shrink: 0;
+      }
+      #hud-accel-neg {
+        height: 100%;
+        width: 0%;
+        background: #ef4444; /* braking: red */
+        border-radius: 4px 0 0 4px;
+        transition: width 0.08s linear;
+      }
+      #hud-accel-pos {
+        height: 100%;
+        width: 0%;
+        background: #22c55e; /* accelerating: green */
+        border-radius: 0 4px 4px 0;
+        transition: width 0.08s linear;
+      }
+
+      /* Status line */
+      #hud-status-row {
+        border-top: 1px solid #1e2a35;
+        padding-top: 6px;
+        margin-top: 4px;
+        font-size: 11px;
+        text-align: center;
+        letter-spacing: 0.04em;
+        opacity: 0.7;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
     </style>
   </head>
   <body>
     <div id="scene"></div>
-    <div id="status">Waiting for vehicle...</div>
+
+    <!-- Alert pill — top center -->
+    <div id="alert-pill" hidden>
+      <span id="alert-pill-text"></span>
+      <span id="alert-pill-code"></span>
+    </div>
+
+    <!-- Bottom-left column: HUD panel above, connection status below -->
+    <div id="bottom-left">
+      <!-- Status panel (design §6.1) -->
+      <div id="hud">
+        <!-- Speed and speed limit -->
+        <div class="hud-speed-row">
+          <div class="hud-speed-block">
+            <span id="hud-speed">--</span>
+            <span id="hud-speed-unit" class="hud-speed-unit">km/h</span>
+          </div>
+          <div id="hud-limit-box" hidden>
+            <span id="hud-limit">--</span>
+            <span id="hud-limit-unit" class="hud-speed-unit">km/h</span>
+          </div>
+        </div>
+
+        <hr class="hud-divider" />
+
+        <!-- Lead vehicle distance and time gap -->
+        <div id="hud-lead-row" hidden>
+          <span class="hud-lbl">LEAD</span>
+          <span id="hud-lead-dist" class="hud-val">--</span>
+          <span class="hud-unit">m</span>
+          <span style="margin-left: 6px" id="hud-lead-gap" class="hud-val">--</span>
+          <span class="hud-unit">s gap</span>
+        </div>
+
+        <hr class="hud-divider" />
+
+        <!-- Steering wheel icon + single signed pedal bar -->
+        <div class="hud-controls-row">
+          <svg id="hud-wheel" viewBox="-12 -12 24 24" width="36" height="36" aria-hidden="true">
+            <circle r="11" fill="none" stroke="currentColor" stroke-width="1.5" />
+            <circle r="2.5" fill="currentColor" />
+            <line x1="0" y1="-2.5" x2="0" y2="-11" stroke="currentColor" stroke-width="1.5" />
+            <line x1="0" y1="2.5" x2="0" y2="11" stroke="currentColor" stroke-width="1.5" />
+            <line x1="-2.5" y1="0" x2="-11" y2="0" stroke="currentColor" stroke-width="1.5" />
+            <line x1="2.5" y1="0" x2="11" y2="0" stroke="currentColor" stroke-width="1.5" />
+          </svg>
+          <div class="hud-pedal-wrap">
+            <div class="hud-pedal-label">PEDAL</div>
+            <div class="hud-pedal-bar">
+              <div class="hud-pedal-half left">
+                <div id="hud-accel-neg"></div>
+              </div>
+              <div class="hud-pedal-center"></div>
+              <div class="hud-pedal-half right">
+                <div id="hud-accel-pos"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stack status line -->
+        <div id="hud-status-row"><span id="hud-status"></span></div>
+      </div>
+      <!-- Connection status below the HUD panel -->
+      <div id="status">Waiting for vehicle...</div>
+    </div>
+
     <div id="credit">
       Vehicle meshes:
       <a

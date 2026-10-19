@@ -1,6 +1,33 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, beforeAll } from "vitest";
 import * as THREE from "three";
-import { egoToScene, ObjectManager, type RawObject } from "./objects";
+import { egoToScene } from "./frames";
+import { ObjectManager, type RawObject } from "./objects";
+
+// Minimal canvas mock for tests that exercise the lead-vehicle label sprite.
+// The test environment has no DOM, so `document.createElement("canvas")` would throw.
+function mockCanvas() {
+  const ctx = {
+    clearRect: () => {},
+    fillText: () => {},
+    fillStyle: "" as string,
+    font: "" as string,
+    textAlign: "" as string,
+    textBaseline: "" as string,
+  };
+  return {
+    width: 0,
+    height: 0,
+    getContext: () => ctx,
+  };
+}
+
+beforeAll(() => {
+  if (typeof (globalThis as Record<string, unknown>).document === "undefined") {
+    (globalThis as Record<string, unknown>).document = {
+      createElement: (_tag: string) => mockCanvas(),
+    };
+  }
+});
 
 // ---------------------------------------------------------------------------
 // egoToScene — pure function
@@ -73,7 +100,7 @@ describe("ObjectManager fade", () => {
   });
 
   it("starts with opacity 0 and fades in over FADE_IN_S = 0.3 s", () => {
-    mgr.update([makeObj(1)], "map", 0, 0, 0);
+    mgr.update([makeObj(1)], "map");
     const tracked = (mgr as unknown as { tracked: Map<number, { opacity: number }> }).tracked;
 
     mgr.tick(0.15, 0, 0, 0); // half of fade-in
@@ -84,10 +111,10 @@ describe("ObjectManager fade", () => {
   });
 
   it("fades out and removes the object after FADE_OUT_S = 0.5 s", () => {
-    mgr.update([makeObj(1)], "map", 0, 0, 0);
+    mgr.update([makeObj(1)], "map");
     mgr.tick(0.3, 0, 0, 0); // fully faded in
 
-    mgr.update([], "map", 0, 0, 0); // object gone
+    mgr.update([], "map"); // object gone
     mgr.tick(0.25, 0, 0, 0); // half of fade-out
     const tracked = (mgr as unknown as { tracked: Map<number, { opacity: number }> }).tracked;
     expect(tracked.get(1)!.opacity).toBeCloseTo(0.5, 1);
@@ -98,7 +125,7 @@ describe("ObjectManager fade", () => {
   });
 
   it("stackLost fades objects to 15% opacity and holds them", () => {
-    mgr.update([makeObj(1)], "map", 0, 0, 0);
+    mgr.update([makeObj(1)], "map");
     mgr.tick(0.3, 0, 0, 0); // fully faded in
 
     mgr.stackLost();
@@ -112,14 +139,71 @@ describe("ObjectManager fade", () => {
     expect(tracked.has(1)).toBe(true); // object stays in scene
   });
 
+  it("label sprite is removed from scene when object fades out", () => {
+    mgr.update([makeObj(1, true)], "map"); // lead=true so label sprite is created
+    mgr.tick(0.3, 0, 0, 0); // fully faded in — sprite is created and positioned
+    const spritesBefore = scene.children.filter((c) => c instanceof THREE.Sprite).length;
+    expect(spritesBefore).toBe(1);
+
+    mgr.update([], "map"); // object removed
+    mgr.tick(0.5, 0, 0, 0); // full fade-out — entry deleted, sprite removed
+    const spritesAfter = scene.children.filter((c) => c instanceof THREE.Sprite).length;
+    expect(spritesAfter).toBe(0);
+  });
+
+  it("setLeadAlert(false) hides ring on former lead when lead flag moves to another id", () => {
+    mgr.update([makeObj(1, true), makeObj(2, false)], "map");
+    mgr.tick(0.3, 0, 0, 0);
+    mgr.setLeadAlert(true); // id 1 gets a ring
+    const tracked = (mgr as unknown as { tracked: Map<number, { ring: THREE.LineLoop | null }> })
+      .tracked;
+    expect(tracked.get(1)!.ring?.visible).toBe(true);
+
+    // Lead flag moves: id 1 is no longer lead.
+    mgr.update([makeObj(1, false), makeObj(2, true)], "map");
+    mgr.tick(0, 0, 0, 0);
+    mgr.setLeadAlert(true); // id 2 should get ring, id 1's ring should be hidden
+    expect(tracked.get(1)!.ring?.visible).toBe(false);
+    expect(tracked.get(2)!.ring?.visible).toBe(true);
+  });
+
+  it("label sprite fades with the car when the stack is lost", () => {
+    mgr.update([makeObj(1, true)], "map");
+    mgr.tick(0.3, 0, 0, 0);
+    mgr.stackLost();
+    mgr.tick(0.5, 0, 0, 0);
+    const sprite = scene.children.find((c) => c instanceof THREE.Sprite) as THREE.Sprite;
+    expect(sprite.material.opacity).toBeCloseTo(0.15, 2);
+  });
+
+  it("leadDistM prefers distance_m from the stack", () => {
+    mgr.update([{ ...makeObj(1, true), x: 32.1, y: 3, distance_m: 29.8 }], "ego");
+    expect(mgr.leadDistM(0, 0)).toBeCloseTo(29.8);
+  });
+
+  it("leadDistM measures map-frame leads from ego, not from the map origin", () => {
+    // Ego at map (1200, -40) is scene (x=-40, z=1200). Lead 30 m ahead at map (1230, -40).
+    mgr.update([{ ...makeObj(1, true), x: 1230, y: -40 }], "map");
+    expect(mgr.leadDistM(-40, 1200)).toBeCloseTo(30);
+  });
+
+  it("leadDistM is null without a lead and after stackLost", () => {
+    mgr.update([makeObj(1, false)], "ego");
+    expect(mgr.leadDistM(0, 0)).toBeNull();
+    mgr.update([{ ...makeObj(1, true), x: 20 }], "ego");
+    expect(mgr.leadDistM(0, 0)).toBeCloseTo(20);
+    mgr.stackLost();
+    expect(mgr.leadDistM(0, 0)).toBeNull();
+  });
+
   it("unfreezes and resumes normal tracking when object reappears after stackLost", () => {
-    mgr.update([makeObj(1)], "map", 0, 0, 0);
+    mgr.update([makeObj(1)], "map");
     mgr.tick(0.3, 0, 0, 0);
     mgr.stackLost();
     mgr.tick(0.5, 0, 0, 0);
 
     // Stack reconnects and sends the object again.
-    mgr.update([makeObj(1)], "map", 0, 0, 0);
+    mgr.update([makeObj(1)], "map");
     mgr.tick(0.3, 0, 0, 0);
 
     const tracked = (mgr as unknown as { tracked: Map<number, { opacity: number }> }).tracked;
