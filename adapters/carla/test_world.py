@@ -56,6 +56,49 @@ def test_boundary_splits_at_a_gap():
     assert [len(f["pts"]) for f in left] == [3, 3]
 
 
+def junction_lane(road_id: int, radius: float, turn_deg: float) -> list[world.Sample]:
+    """A NONE-marked junction lane from (100, 0) heading +x, a left arc, a sample every 2 m."""
+    turn = math.radians(turn_deg)
+    n = int(radius * turn / 2.0) + 1
+    out = []
+    for k in range(n):
+        a = turn * k / (n - 1)
+        x, y = 100 + radius * math.sin(a), radius * (1 - math.cos(a))
+        out.append(
+            world.Sample(
+                (road_id, 0, -1), radius * a, x, y, a, 3.5, "NONE", "NONE", "none", "none", True
+            )
+        )
+    return out
+
+
+def junction_starts(feats: list[dict]) -> list[tuple[str, list[float]]]:
+    return sorted((f["kind"], f["pts"][0]) for f in feats if f["pts"][0][0] >= 100)
+
+
+def test_junction_keeps_through_lanes_marked_like_the_road_in():
+    # CARLA marks junction lanes NONE. The through lane continues the inner lane of road();
+    # the left turn from the same point must not be drawn.
+    through = [
+        world.Sample((2, 0, -1), s, 100.0 + s, 0.0, 0.0, 3.5, "NONE", "NONE", "none", "none", True)
+        for s in range(0, 40, 2)
+    ]
+    feats = world.boundaries(road() + through + junction_lane(3, 20.0, 90.0))
+    assert junction_starts(feats) == [
+        ("lane_dashed", [100.0, -1.75]),
+        ("lane_solid", [100.0, 1.75]),
+    ]
+
+
+def test_junction_keeps_a_highway_curve():
+    # Town04 junction 1593: the through lanes bend 44 degrees on a radius of about 60 m.
+    feats = world.boundaries(road() + junction_lane(2, 60.0, 45.0))
+    assert junction_starts(feats) == [
+        ("lane_dashed", [100.0, -1.75]),
+        ("lane_solid", [100.0, 1.75]),
+    ]
+
+
 def test_opposite_neighbor_keeps_the_center_line():
     lane = [sample(-1, 2.0 * i, 0.0, "SolidSolid", "NONE", "opposite", "none") for i in range(5)]
     assert {f["kind"] for f in world.boundaries(lane)} == {"lane_solid", "road_edge"}

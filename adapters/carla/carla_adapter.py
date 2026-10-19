@@ -47,6 +47,7 @@ def sample(wp) -> world.Sample:
         str(wp.right_lane_marking.type),
         neighbor(wp, wp.get_left_lane()),
         neighbor(wp, wp.get_right_lane()),
+        wp.is_junction,
     )
 
 
@@ -74,7 +75,7 @@ async def run(args: argparse.Namespace) -> None:
     if hero is None:
         sys.exit(f"no vehicle with role_name hero after {HERO_WAIT_S:.0f} s")
     wps = w.get_map().generate_waypoints(2.0)
-    driving = [wp for wp in wps if wp.lane_type == carla.LaneType.Driving and not wp.is_junction]
+    driving = [wp for wp in wps if wp.lane_type == carla.LaneType.Driving]
     features = world.boundaries([sample(wp) for wp in driving])
     print(f"{len(features)} lane boundaries from {len(driving)} waypoints", file=sys.stderr)
     max_steer = hero.get_physics_control().wheels[0].max_steer_angle

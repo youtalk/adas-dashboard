@@ -12,6 +12,9 @@ SOURCE = "carla"
 MAP_RANGE_M = 200.0
 MAP_RESEND_M = 20.0
 SPLIT_GAP_M = 3.0  # waypoints come every 2 m. A larger step is another piece of road.
+# Town04 junctions: through lanes bend up to 54 degrees, turns at a crossing 68 or more.
+TURN_RAD = math.radians(60.0)
+HEADING_RAD = math.radians(15.0)  # a lane end this close in heading continues the junction lane
 SOLID = {"Solid", "SolidSolid", "SolidBroken", "BrokenSolid", "Curb"}
 BROKEN = {"Broken", "BrokenBroken", "BottsDots"}
 
@@ -29,6 +32,7 @@ class Sample(NamedTuple):
     right: str
     left_neighbor: str  # "none" (missing or not Driving), "same" or "opposite" direction
     right_neighbor: str
+    junction: bool = False
 
 
 def to_map(x: float, y: float, yaw_deg: float) -> tuple[float, float, float]:
@@ -88,14 +92,60 @@ def _flush(out: list[dict], kind: str | None, run: list[list[float]]) -> None:
         out.append({"kind": kind, "pts": run})
 
 
+def _turn(a: float, b: float) -> float:
+    return abs((b - a + math.pi) % (2 * math.pi) - math.pi)
+
+
+def _through(lanes: dict[tuple[int, int, int], list[Sample]]) -> None:
+    """Keep the junction lanes that go through, marked like the lane that meets them.
+
+    CARLA marks most junction lanes NONE, so the lines would stop at every junction. Turning
+    lanes stay out, because they would cross the through lanes.
+    """
+    ends = [p for pts in lanes.values() if not pts[0].junction for p in (pts[0], pts[-1])]
+
+    def gap(e: Sample, pts: list[Sample]) -> float:
+        """Distance from a lane end to the nearer end of pts that has the same heading."""
+        return min(
+            (
+                math.dist((e.x, e.y), (p.x, p.y))
+                for p in (pts[0], pts[-1])
+                if _turn(e.yaw, p.yaw) < HEADING_RAD
+            ),
+            default=math.inf,
+        )
+
+    # ponytail: every junction lane against every lane end, 0.07 s for Town04 at start.
+    for key, pts in list(lanes.items()):
+        if not pts[0].junction:
+            continue
+        del lanes[key]
+        if _turn(pts[0].yaw, pts[-1].yaw) > TURN_RAD:
+            continue
+        src = min(ends, key=lambda e: gap(e, pts), default=None)
+        if src is None or gap(src, pts) > SPLIT_GAP_M:
+            continue
+        lanes[key] = [
+            p._replace(
+                left=src.left,
+                right=src.right,
+                left_neighbor=src.left_neighbor,
+                right_neighbor=src.right_neighbor,
+            )
+            for p in pts
+        ]
+
+
 def boundaries(samples: list[Sample]) -> list[dict]:
     """Lane boundary polylines for the whole map. Built once at start."""
     lanes: dict[tuple[int, int, int], list[Sample]] = defaultdict(list)
     for p in samples:
         lanes[p.lane].append(p)
-    out: list[dict] = []
     for pts in lanes.values():
         pts.sort(key=lambda p: p.s)
+    _through(lanes)
+    out: list[dict] = []
+    for pts in lanes.values():
         for side in ("left", "right"):
             run: list[list[float]] = []
             run_kind = None
