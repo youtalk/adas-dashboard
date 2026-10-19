@@ -1,12 +1,10 @@
 import * as THREE from "three";
-import { egoToScene } from "./objects";
-import { mapToScene } from "./frames";
+import { toScene } from "./frames";
+import { ALERT_COLOR, STACK_LOST_FADE_S, STACK_LOST_OPACITY } from "./style";
 
 export type RawLane = { kind: string; pts: [number, number][] };
 
 const LANE_COLOR = 0x22d3ee; // cyan §6.5
-const ALERT_COLOR = 0xb91c1c; // alert red §6.5
-const STACK_LOST_OPACITY = 0.15;
 
 type LaneLine = { kind: string; line: THREE.Line; capacity: number };
 
@@ -15,7 +13,9 @@ export class LaneManager {
   private lines: LaneLine[] = [];
   private rawLanes: RawLane[] = [];
   private frame: "ego" | "map" = "ego";
-  private alertKind: string | null = null;
+  private alertKinds: string[] = [];
+  private lost = false;
+  private opacity = 1;
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -25,26 +25,27 @@ export class LaneManager {
     this.rawLanes = lanes;
     this.frame = frame;
     // Restore full opacity after a stackLost ghost.
-    for (const { line } of this.lines) {
-      const mat = line.material as THREE.LineBasicMaterial;
-      mat.transparent = false;
-      mat.opacity = 1;
-    }
+    this.lost = false;
+    this.setOpacity(1);
   }
 
-  setAlertKind(kind: string | null): void {
-    if (kind === this.alertKind) return;
-    this.alertKind = kind;
-    // Recolor existing lines immediately without waiting for next rebuild.
-    for (const { kind: k, line } of this.lines) {
+  // Ego-frame lanes move with ego. Map-frame lanes and a lost stack's ghost stay put.
+  get followsEgo(): boolean {
+    return this.frame === "ego" && !this.lost;
+  }
+
+  // Color every lane whose kind is in the list (e.g. ["left", "right"]).
+  setAlertKinds(kinds: string[]): void {
+    this.alertKinds = kinds;
+    for (const { kind, line } of this.lines) {
       (line.material as THREE.LineBasicMaterial).color.setHex(
-        k === kind ? ALERT_COLOR : LANE_COLOR,
+        kinds.includes(kind) ? ALERT_COLOR : LANE_COLOR,
       );
     }
   }
 
-  // Rebuild line geometries with the current ego pose (called every frame for
-  // ego-frame lanes so they track the moving ego between 10 Hz message arrivals).
+  // Rebuild line geometries with the current ego pose. main.ts calls it when a
+  // message arrives, and on every ego move while followsEgo is true.
   rebuild(egoSceneX: number, egoSceneZ: number, egoYaw: number): void {
     if (this.rawLanes.length === 0) {
       this.clear();
@@ -74,7 +75,7 @@ export class LaneManager {
       if (entry.kind !== lane.kind) {
         entry.kind = lane.kind;
         (entry.line.material as THREE.LineBasicMaterial).color.setHex(
-          lane.kind === this.alertKind ? ALERT_COLOR : LANE_COLOR,
+          this.alertKinds.includes(lane.kind) ? ALERT_COLOR : LANE_COLOR,
         );
       }
 
@@ -99,19 +100,10 @@ export class LaneManager {
 
       for (let j = 0; j < n; j++) {
         const [lx, ly] = lane.pts[j];
-        let sx: number, sz: number;
-        if (this.frame === "ego") {
-          const p = egoToScene(lx, ly, 0, egoSceneX, egoSceneZ, egoYaw);
-          sx = p.x;
-          sz = p.z;
-        } else {
-          const p = mapToScene(lx, ly);
-          sx = p.x;
-          sz = p.z;
-        }
-        arr[j * 3] = sx;
+        const p = toScene(this.frame, lx, ly, egoSceneX, egoSceneZ, egoYaw);
+        arr[j * 3] = p.x;
         arr[j * 3 + 1] = 0.02; // slightly above road to avoid z-fighting
-        arr[j * 3 + 2] = sz;
+        arr[j * 3 + 2] = p.z;
       }
 
       posAttr.needsUpdate = true;
@@ -120,12 +112,23 @@ export class LaneManager {
     }
   }
 
-  // Fade all lane lines to ghost opacity (design §6.3 Stack lost).
+  // Start the fade to ghost opacity (design §6.3 Stack lost). tick() runs it.
   stackLost(): void {
+    this.lost = true;
+  }
+
+  tick(dt: number): void {
+    if (this.lost && this.opacity > STACK_LOST_OPACITY) {
+      this.setOpacity(Math.max(STACK_LOST_OPACITY, this.opacity - dt / STACK_LOST_FADE_S));
+    }
+  }
+
+  private setOpacity(opacity: number): void {
+    this.opacity = opacity;
     for (const { line } of this.lines) {
       const mat = line.material as THREE.LineBasicMaterial;
-      mat.transparent = true;
-      mat.opacity = STACK_LOST_OPACITY;
+      mat.transparent = opacity < 1;
+      mat.opacity = opacity;
     }
   }
 

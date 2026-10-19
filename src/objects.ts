@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { egoToScene } from "./frames";
+import { ALERT_COLOR, STACK_LOST_FADE_S, STACK_LOST_OPACITY } from "./style";
 
 import carUrl from "../assets/meshes/car.glb?url";
 import suvUrl from "../assets/meshes/suv.glb?url";
@@ -42,7 +44,6 @@ const YAW_FIX = -Math.PI / 2;
 
 const FADE_IN_S = 0.3;
 const FADE_OUT_S = 0.5;
-const STACK_LOST_OPACITY = 0.15;
 
 // Design section 6.5: traffic blue, lead red.
 const TRAFFIC_COLOR = 0x3b82f6;
@@ -66,9 +67,10 @@ const LABEL_COLOR = "#ef4444"; // lead red §6.5, used in canvas text
 
 // Ego-frame record: raw detector position used to re-derive scene pose each
 // frame with the current ego pose, so objects track the moving ego correctly.
-type EgoRecord = { ox: number; oy: number; oyaw: number; atMs: number };
+// distM is the stack's distance_m, when it sends one.
+type EgoRecord = { ox: number; oy: number; oyaw: number; atMs: number; distM?: number };
 // Map-frame record: scene position is fixed in world space between messages.
-type SceneRecord = { x: number; z: number; ry: number; atMs: number };
+type SceneRecord = { x: number; z: number; ry: number; atMs: number; distM?: number };
 
 type Entry = {
   outer: THREE.Group;
@@ -125,25 +127,6 @@ export function normalizeTemplate(
     1 / Math.max(size.z, 1e-6),
   );
   return unit;
-}
-
-// Convert a position in ego frame to scene (x, z) and scene rotation.y.
-// Ego frame: x-forward, y-left.  Scene frame: x = ego-y, z = ego-x.
-export function egoToScene(
-  ox: number,
-  oy: number,
-  oyaw: number,
-  egoSceneX: number,
-  egoSceneZ: number,
-  egoYaw: number,
-): { x: number; z: number; ry: number } {
-  const c = Math.cos(egoYaw);
-  const s = Math.sin(egoYaw);
-  return {
-    x: egoSceneX + ox * s + oy * c,
-    z: egoSceneZ + ox * c - oy * s,
-    ry: egoYaw + oyaw,
-  };
 }
 
 export class ObjectManager {
@@ -271,10 +254,11 @@ export class ObjectManager {
       // egoToScene with the live ego pose each frame so objects track the ego
       // even between 10 Hz message arrivals.
       entry.prev = entry.curr;
+      const distM = obj.distance_m;
       if (frame === "ego") {
-        entry.curr = { ox: obj.x, oy: obj.y, oyaw: obj.yaw, atMs: nowMs } as EgoRecord;
+        entry.curr = { ox: obj.x, oy: obj.y, oyaw: obj.yaw, atMs: nowMs, distM } as EgoRecord;
       } else {
-        entry.curr = { x: obj.y, z: obj.x, ry: obj.yaw, atMs: nowMs } as SceneRecord;
+        entry.curr = { x: obj.y, z: obj.x, ry: obj.yaw, atMs: nowMs, distM } as SceneRecord;
       }
       entry.fadingOut = false;
       entry.frozen = false;
@@ -298,9 +282,10 @@ export class ObjectManager {
       // Stack lost: fade toward 15% opacity and hold position.
       if (entry.frozen) {
         if (entry.opacity > STACK_LOST_OPACITY) {
-          entry.opacity = Math.max(STACK_LOST_OPACITY, entry.opacity - dt / FADE_OUT_S);
+          entry.opacity = Math.max(STACK_LOST_OPACITY, entry.opacity - dt / STACK_LOST_FADE_S);
         }
         for (const mat of entry.mats) mat.opacity = entry.opacity;
+        if (entry.labelSprite) entry.labelSprite.material.opacity = entry.opacity;
         const frozenShadow = entry.opacity > 0.5;
         for (const mesh of entry.meshes) mesh.castShadow = frozenShadow;
         continue;
@@ -423,23 +408,31 @@ export class ObjectManager {
     }
   }
 
-  // Extract distance in meters from the entry's current record.
+  // Distance in meters: the stack's distance_m when sent, otherwise measured from ego.
   private getDistM(rec: EgoRecord | SceneRecord, egoSceneX: number, egoSceneZ: number): number {
-    if ("ox" in rec) {
-      // ego frame: distance = hypot of raw detector position
-      return Math.sqrt(rec.ox * rec.ox + rec.oy * rec.oy);
-    }
+    if (rec.distM != null) return rec.distM;
+    // ego frame: distance = hypot of raw detector position
+    if ("ox" in rec) return Math.hypot(rec.ox, rec.oy);
     // map frame: measure from ego scene position, not map origin
-    const dx = rec.x - egoSceneX;
-    const dz = rec.z - egoSceneZ;
-    return Math.sqrt(dx * dx + dz * dz);
+    return Math.hypot(rec.x - egoSceneX, rec.z - egoSceneZ);
+  }
+
+  // Distance to the live lead vehicle, or null when there is none or the stack
+  // is lost. The HUD uses it so the panel and the label show the same number.
+  leadDistM(egoSceneX: number, egoSceneZ: number): number | null {
+    for (const entry of this.tracked.values()) {
+      if (entry.isLead && entry.curr && !entry.frozen && !entry.fadingOut) {
+        return this.getDistM(entry.curr, egoSceneX, egoSceneZ);
+      }
+    }
+    return null;
   }
 
   // Show or hide the alert ring on the lead vehicle (design §6.3 Alert state).
   setLeadAlert(show: boolean): void {
     for (const entry of this.tracked.values()) {
       if (show && entry.isLead && !entry.ring) {
-        const mat = new THREE.LineBasicMaterial({ color: 0xb91c1c });
+        const mat = new THREE.LineBasicMaterial({ color: ALERT_COLOR });
         const ring = new THREE.LineLoop(RING_GEOM, mat);
         ring.position.y = 0.3; // just above ground in outer-local space
         entry.outer.add(ring);

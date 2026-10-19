@@ -1,11 +1,9 @@
 import * as THREE from "three";
-import { egoToScene } from "./objects";
-import { mapToScene } from "./frames";
+import { toScene } from "./frames";
+import { ALERT_COLOR, STACK_LOST_FADE_S, STACK_LOST_OPACITY } from "./style";
 
 const TRAJ_COLOR = 0x22c55e; // green §6.5
-const ALERT_COLOR = 0xb91c1c; // alert red §6.5
 const DEFAULT_WIDTH_M = 1.9; // ego vehicle width fallback (design §5.2)
-const STACK_LOST_OPACITY = 0.15;
 const TRAJ_Y = 0.03; // just above road surface
 
 export class TrajectoryRibbon {
@@ -17,6 +15,7 @@ export class TrajectoryRibbon {
   private rawWidthM = DEFAULT_WIDTH_M;
   private frame: "ego" | "map" = "ego";
   private vertexCapacity = 0;
+  private lost = false;
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -32,24 +31,34 @@ export class TrajectoryRibbon {
     this.rawWidthM = widthM ?? DEFAULT_WIDTH_M;
     this.frame = frame;
     // Restore full opacity after a stackLost ghost.
+    this.lost = false;
     this.mat.transparent = false;
     this.mat.opacity = 1;
+  }
+
+  // An ego-frame ribbon moves with ego. A map-frame ribbon and a lost stack's ghost stay put.
+  get followsEgo(): boolean {
+    return this.frame === "ego" && !this.lost;
   }
 
   setAlert(isAlert: boolean): void {
     this.mat.color.setHex(isAlert ? ALERT_COLOR : TRAJ_COLOR);
   }
 
-  // Fade the ribbon to ghost opacity (design §6.3 Stack lost).
+  // Start the fade to ghost opacity (design §6.3 Stack lost). tick() runs it.
   stackLost(): void {
-    if (this.mesh) {
+    this.lost = true;
+  }
+
+  tick(dt: number): void {
+    if (this.lost && this.mat.opacity > STACK_LOST_OPACITY) {
       this.mat.transparent = true;
-      this.mat.opacity = STACK_LOST_OPACITY;
+      this.mat.opacity = Math.max(STACK_LOST_OPACITY, this.mat.opacity - dt / STACK_LOST_FADE_S);
     }
   }
 
-  // Rebuild ribbon geometry with the current ego pose (called every frame for
-  // ego-frame trajectories so the path tracks the moving ego at 60 Hz).
+  // Rebuild ribbon geometry with the current ego pose. main.ts calls it when a
+  // message arrives, and on every ego move while followsEgo is true.
   rebuild(egoSceneX: number, egoSceneZ: number, egoYaw: number): void {
     const pts = this.rawPts;
     if (pts.length < 2) {
@@ -58,13 +67,7 @@ export class TrajectoryRibbon {
     }
 
     // Convert raw points to scene space.
-    const sp: { x: number; z: number }[] = pts.map(([lx, ly]) => {
-      if (this.frame === "ego") {
-        const p = egoToScene(lx, ly, 0, egoSceneX, egoSceneZ, egoYaw);
-        return { x: p.x, z: p.z };
-      }
-      return mapToScene(lx, ly);
-    });
+    const sp = pts.map(([lx, ly]) => toScene(this.frame, lx, ly, egoSceneX, egoSceneZ, egoYaw));
 
     const n = sp.length;
     const hw = this.rawWidthM / 2;

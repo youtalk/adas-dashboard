@@ -71,15 +71,30 @@ describe("LaneManager — scene management", () => {
     expect(lines[0].visible).toBe(false);
   });
 
-  it("stackLost sets opacity to 0.15 on all lines", () => {
+  it("stackLost fades all lines to 0.15 over 500 ms and holds", () => {
     mgr.setMsg([leftLane, rightLane], "ego");
     mgr.rebuild(0, 0, 0);
     mgr.stackLost();
     const mats = laneLines(scene).map((l) => l.material as THREE.LineBasicMaterial);
+    expect(mats[0].opacity).toBe(1); // no jump on the stackLost frame
+    mgr.tick(0.25);
+    expect(mats[0].opacity).toBeCloseTo(0.5, 2);
+    mgr.tick(1.0);
     for (const mat of mats) {
       expect(mat.transparent).toBe(true);
       expect(mat.opacity).toBeCloseTo(0.15, 2);
     }
+    mgr.setMsg([leftLane, rightLane], "ego"); // stack is back
+    expect(mats[0].opacity).toBe(1);
+  });
+
+  it("followsEgo only for live ego-frame lanes", () => {
+    mgr.setMsg([leftLane], "ego");
+    expect(mgr.followsEgo).toBe(true);
+    mgr.stackLost();
+    expect(mgr.followsEgo).toBe(false); // ghost holds its world position
+    mgr.setMsg([leftLane], "map");
+    expect(mgr.followsEgo).toBe(false);
   });
 
   it("lane slot is hidden when pts has fewer than 2 points", () => {
@@ -176,7 +191,7 @@ describe("LaneManager — map-frame transform", () => {
 // ---------------------------------------------------------------------------
 
 describe("LaneManager — alert coloring", () => {
-  it("colors the matching kind red when setAlertKind is called", () => {
+  it("colors the matching kind red when setAlertKinds is called", () => {
     const scene = makeScene();
     const mgr = new LaneManager(scene);
     mgr.setMsg([leftLane, rightLane], "ego");
@@ -187,7 +202,7 @@ describe("LaneManager — alert coloring", () => {
       const m = scene.children.filter((c) => c instanceof THREE.Line)[i];
       return m === lines[0];
     });
-    mgr.setAlertKind("left");
+    mgr.setAlertKinds(["left"]);
     const mats = scene.children
       .filter((c) => c instanceof THREE.Line)
       .map((c) => (c as THREE.Line).material as THREE.LineBasicMaterial);
@@ -197,14 +212,25 @@ describe("LaneManager — alert coloring", () => {
     expect(cyanMat).toBeDefined();
   });
 
-  it("restores cyan when setAlertKind is cleared", () => {
+  it("restores cyan when setAlertKinds is cleared", () => {
     const scene = makeScene();
     const mgr = new LaneManager(scene);
     mgr.setMsg([leftLane], "ego");
     mgr.rebuild(0, 0, 0);
-    mgr.setAlertKind("left");
-    mgr.setAlertKind(null);
+    mgr.setAlertKinds(["left"]);
+    mgr.setAlertKinds([]);
     const mat = laneLines(scene)[0].material as THREE.LineBasicMaterial;
     expect(mat.color.getHex()).toBe(0x22d3ee);
+  });
+
+  it("colors both lanes red when both are targets", () => {
+    const scene = makeScene();
+    const mgr = new LaneManager(scene);
+    mgr.setMsg([leftLane, rightLane], "ego");
+    mgr.rebuild(0, 0, 0);
+    mgr.setAlertKinds(["left", "right"]);
+    for (const line of laneLines(scene)) {
+      expect((line.material as THREE.LineBasicMaterial).color.getHex()).toBe(0xb91c1c);
+    }
   });
 });

@@ -212,7 +212,8 @@ function animate() {
       lanesUpdated = true;
     }
   }
-  if (lanesUpdated || egoPoseChanged) {
+  // Map-frame geometry and a lost stack's ghost change only with a new message.
+  if (lanesUpdated || (egoPoseChanged && laneManager.followsEgo)) {
     laneManager.rebuild(egoSceneX, egoSceneZ, egoRawYaw);
   }
 
@@ -227,7 +228,7 @@ function animate() {
       trajUpdated = true;
     }
   }
-  if (trajUpdated || egoPoseChanged) {
+  if (trajUpdated || (egoPoseChanged && trajectory.followsEgo)) {
     trajectory.rebuild(egoSceneX, egoSceneZ, egoRawYaw);
   }
 
@@ -254,12 +255,10 @@ function animate() {
   const targets = new Set(alertPill.held.map((a) => a.target).filter(Boolean) as string[]);
   objManager.setLeadAlert(targets.has("lead"));
   trajectory.setAlert(targets.has("trajectory"));
-  laneManager.setAlertKind(
-    targets.has("lane_left") ? "left" : targets.has("lane_right") ? "right" : null,
-  );
+  laneManager.setAlertKinds(["left", "right"].filter((kind) => targets.has(`lane_${kind}`)));
 
-  // --- stack status: speed limit and status line ---
-  const rawStatus = latestByRole("stack", "status") as unknown as StatusMsg | undefined;
+  // --- stack status: speed limit and status line (live stack only) ---
+  const rawStatus = allByRole("stack", "status")[0] as unknown as StatusMsg | undefined;
   const limitMps = rawStatus?.speed_limit_mps ?? null;
   const statusLine = rawStatus
     ? [
@@ -271,20 +270,9 @@ function animate() {
         .join(" · ")
     : "";
 
-  // --- lead vehicle info ---
-  const objects = rawObjects ? (rawObjects as unknown as ObjectsMsg).objects ?? [] : [];
-  const leadObj = objects.find((o) => o.lead);
-  let leadDistM: number | null = null;
-  let leadGapS: number | null = null;
-  if (leadObj) {
-    leadDistM =
-      leadObj.distance_m != null
-        ? leadObj.distance_m
-        : Math.sqrt(leadObj.x * leadObj.x + leadObj.y * leadObj.y);
-    if (speedMps >= 0.5) {
-      leadGapS = leadDistM / speedMps;
-    }
-  }
+  // --- lead vehicle info (same number as the scene label) ---
+  const leadDistM = objManager.leadDistM(egoSceneX, egoSceneZ);
+  const leadGapS = leadDistM !== null && speedMps >= 0.5 ? leadDistM / speedMps : null;
 
   // --- HUD ---
   const hudData: HudData = {
@@ -300,6 +288,8 @@ function animate() {
   hud.update(hudData);
 
   objManager.tick(dt, egoSceneX, egoSceneZ, egoRawYaw);
+  laneManager.tick(dt);
+  trajectory.tick(dt);
   alertPill.tick(dt);
   renderer.render(scene, camera);
 }

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, beforeAll } from "vitest";
 import * as THREE from "three";
-import { egoToScene, ObjectManager, type RawObject } from "./objects";
+import { egoToScene } from "./frames";
+import { ObjectManager, type RawObject } from "./objects";
 
 // Minimal canvas mock for tests that exercise the lead-vehicle label sprite.
 // The test environment has no DOM, so `document.createElement("canvas")` would throw.
@@ -164,6 +165,35 @@ describe("ObjectManager fade", () => {
     mgr.setLeadAlert(true); // id 2 should get ring, id 1's ring should be hidden
     expect(tracked.get(1)!.ring?.visible).toBe(false);
     expect(tracked.get(2)!.ring?.visible).toBe(true);
+  });
+
+  it("label sprite fades with the car when the stack is lost", () => {
+    mgr.update([makeObj(1, true)], "map");
+    mgr.tick(0.3, 0, 0, 0);
+    mgr.stackLost();
+    mgr.tick(0.5, 0, 0, 0);
+    const sprite = scene.children.find((c) => c instanceof THREE.Sprite) as THREE.Sprite;
+    expect(sprite.material.opacity).toBeCloseTo(0.15, 2);
+  });
+
+  it("leadDistM prefers distance_m from the stack", () => {
+    mgr.update([{ ...makeObj(1, true), x: 32.1, y: 3, distance_m: 29.8 }], "ego");
+    expect(mgr.leadDistM(0, 0)).toBeCloseTo(29.8);
+  });
+
+  it("leadDistM measures map-frame leads from ego, not from the map origin", () => {
+    // Ego at map (1200, -40) is scene (x=-40, z=1200). Lead 30 m ahead at map (1230, -40).
+    mgr.update([{ ...makeObj(1, true), x: 1230, y: -40 }], "map");
+    expect(mgr.leadDistM(-40, 1200)).toBeCloseTo(30);
+  });
+
+  it("leadDistM is null without a lead and after stackLost", () => {
+    mgr.update([makeObj(1, false)], "ego");
+    expect(mgr.leadDistM(0, 0)).toBeNull();
+    mgr.update([{ ...makeObj(1, true), x: 20 }], "ego");
+    expect(mgr.leadDistM(0, 0)).toBeCloseTo(20);
+    mgr.stackLost();
+    expect(mgr.leadDistM(0, 0)).toBeNull();
   });
 
   it("unfreezes and resumes normal tracking when object reappears after stackLost", () => {

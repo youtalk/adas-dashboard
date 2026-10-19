@@ -17,6 +17,37 @@ export function mapToScene(x: number, y: number): { x: number; z: number } {
   return { x: y, z: x };
 }
 
+// Convert a position in ego frame to scene (x, z) and scene rotation.y.
+// Ego frame: x-forward, y-left.  Scene frame: x = ego-y, z = ego-x.
+export function egoToScene(
+  ox: number,
+  oy: number,
+  oyaw: number,
+  egoSceneX: number,
+  egoSceneZ: number,
+  egoYaw: number,
+): { x: number; z: number; ry: number } {
+  const c = Math.cos(egoYaw);
+  const s = Math.sin(egoYaw);
+  return {
+    x: egoSceneX + ox * s + oy * c,
+    z: egoSceneZ + ox * c - oy * s,
+    ry: egoYaw + oyaw,
+  };
+}
+
+// Convert a lane or trajectory point from its message frame to scene (x, z).
+export function toScene(
+  frame: "ego" | "map",
+  x: number,
+  y: number,
+  egoSceneX: number,
+  egoSceneZ: number,
+  egoYaw: number,
+): { x: number; z: number } {
+  return frame === "ego" ? egoToScene(x, y, 0, egoSceneX, egoSceneZ, egoYaw) : mapToScene(x, y);
+}
+
 // Ego yaw is CCW-positive around z-up.
 // three.js rotation.y is CCW-positive around y-up; at rotation.y=0 the mesh
 // faces +z. A left turn (positive yaw in ego) rotates toward world +x, which
