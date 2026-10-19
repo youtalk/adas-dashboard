@@ -374,7 +374,7 @@ Keyboard only, no on-screen buttons:
     "world": "ws://127.0.0.1:8091/world",
     "supervisor": "ws://127.0.0.1:8092/supervisor"
   },
-  "camera_url": "http://192.168.0.20:8080/",
+  "camera_url": "data:text/html,<body style='margin:0;overflow:hidden;background:black'><img src='http://127.0.0.1:8080/stream?topic=/carla/hero/main_cam/image&type=mjpeg&quality=80&width=640&height=360' style='width:100%25;height:100%25;object-fit:cover'>",
   "units": "mph",
   "theme": "dark",
   "camera": {
@@ -385,6 +385,8 @@ Keyboard only, no on-screen buttons:
 ```
 
 URL query parameters override `config.json` key by key.
+
+On the bench, `camera_url` is a one-line `data:` page that stretches the MJPEG stream of `web_video_server` (section 15) over the whole PiP. A plain stream URL would show the image at its own size inside the `<iframe>`, with a margin and scroll bars.
 
 ## 8. Frontend stack and repository layout
 
@@ -467,6 +469,6 @@ For reference, not for MultiCoreWare to build.
 
 VisionPilot (`stack`): a WebSocket server in the VisionPilot process, next to the existing WebRTC stream in `modules/visualization/`, reusing Boost.Beast and nlohmann/json that are already linked. It sends `objects`, `trajectory`, `alerts` and `status`. VisionPilot perceives no lane lines, only its planned path, so it sends no `lanes`. It does not know who controls the car, so it sends no `control`. AutoSpeed boxes go to the ground through the homography with the Occupancy view's rule. `class` is `car` or `truck` from the same width heuristic, and a nearest-neighbor tracker gives each box a stable `id`. The trajectory is the path polynomial sampled every meter to 150 m, with an empty `pts` for a frame whose fit failed. `alerts` come from `Plan::warnings`. `FCW` and `AEB` are `critical` with target `lead`. `LLDW` and `RLDW` are `info` with target `trajectory`, because lateral oscillation on the bench would otherwise keep the page in Alert. `status.stages` come from the per-frame latency fields. A configuration flag makes the WebRTC stream send the raw resized camera image instead of the HUD image. The PiP then shows the camera and nothing else.
 
-CARLA (`vehicle`, `map`): a Python client on the CARLA host that never ticks the world. It reads the ego actor's transform, velocity and acceleration once per simulation step, so `ego` goes out at the simulation rate of 10 Hz. It builds the lane boundaries from the OpenDRIVE map once and sends the part within 200 m of the ego.
+CARLA (`vehicle`, `map`): a Python client on the CARLA host that never ticks the world. It reads the ego actor's transform, velocity and acceleration once per simulation step, so `ego` goes out at the simulation rate of 10 Hz. It builds the lane boundaries from the OpenDRIVE map once and sends the part within 200 m of the ego. The camera PiP on the bench shows CARLA's own camera topic, `/carla/hero/main_cam/image`, as an MJPEG stream from `web_video_server` in a container on the CARLA host (`adapters/carla/camera/`). The board's VisionPilot then encodes no video, so its 80 ms frame deadline under the S-CORE launch manager is not affected. The VisionPilot raw camera flag stays for a vehicle without CARLA.
 
 Safety Island (`supervisor`): a ROS 2 node on the CARLA host on DDS domain 1. Domain 2 exists only inside the board and cannot be observed from outside. The node watches `/control/trajectory_follower/control_cmd`, which carries the Cortex-R52 command after the board's bridge, and applies the arbiter's rule: the Safety Island has control while its last command is at most 0.5 s old. It sends `control`, `status` and `alerts`, and it is the only source of `control`. The `hello.name` is `Safety Island`, `device` is `Cortex-R52`.
