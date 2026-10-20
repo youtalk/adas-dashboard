@@ -374,7 +374,7 @@ Keyboard only, no on-screen buttons:
     "world": "ws://127.0.0.1:8091/world",
     "supervisor": "ws://127.0.0.1:8092/supervisor"
   },
-  "camera_url": "data:text/html,<body style='margin:0;overflow:hidden;background:black'><img src='http://127.0.0.1:8080/stream?topic=/carla/hero/main_cam/image&type=mjpeg&quality=80&width=640&height=360' style='width:100%25;height:100%25;object-fit:cover'>",
+  "camera_url": "data:text/html,<body style='margin:0;overflow:hidden;background:black'><img src='http://127.0.0.1:8080/stream?topic=/carla/hero/main_cam/image&type=mjpeg&quality=80&width=640&height=360' onerror='setTimeout(()=>{this.src=this.src},1000)' style='width:100%25;height:100%25;object-fit:cover'>",
   "units": "mph",
   "theme": "dark",
   "camera": {
@@ -388,10 +388,12 @@ URL query parameters override `config.json` key by key.
 
 On the bench, `camera_url` is a one-line `data:` page that stretches the MJPEG stream of `web_video_server` (section 15) over the whole PiP. A plain stream URL would show the image at its own size inside the `<iframe>`, with a margin and scroll bars.
 
+The page loads the `<iframe>` once. If the stream is not up yet, the image fails, so its `onerror` asks for the stream again after 1 s. Without it, a page opened before `web_video_server` keeps a broken image until someone reloads it (board 2, 2026-10-20).
+
 ## 8. Frontend stack and repository layout
 
 - Vite, TypeScript, three.js. No UI framework, no CSS framework. Node 22 LTS.
-- `npm run build` produces `dist/`, a static folder that any HTTP server can serve. `npm run dev` serves it with hot reload. `python3 -m http.server -d dist` is enough on the booth.
+- `npm run build` produces `dist/`, a static folder that any HTTP server can serve. `npm run dev` serves it with hot reload. `python3 -m http.server 8070 -d dist` is enough on the booth. Do not use the default port 8000 on the CARLA host: the CARLA Traffic Manager binds it, and the bridge then fails at start (2026-10-20).
 - Tests with Vitest: the state machine (section 6.3) and the frame transforms (`map` to `ego`). One replay smoke test that loads a recording and makes sure that all six states are reached. No end-to-end browser tests are required.
 - Lint and format with the repository's `pre-commit` configuration: prettier, markdownlint-cli2, ruff, ruff-format, and the generic pre-commit hooks. ESLint and cspell arrive in W1, because the frontend code will then exist for cspell's word list and for ESLint to lint. CI runs build, tests and pre-commit on every pull request.
 
@@ -460,7 +462,7 @@ If all of these hold, the work is complete:
 2. The recorded kill run replays through Connecting, Driving, Alert, Stack lost, Takeover and Stopped with the appearance in section 6, in both themes.
 3. The live bench run in W5 shows the same with VisionPilot on the board and CARLA on the host. It runs at 60 fps at 1080p while CARLA renders on the same GPU.
 4. Every endpoint's messages pass the JSON Schema in `schema/v1/`.
-5. The page runs from `python3 -m http.server -d dist` with `config.json` only.
+5. The page runs from `python3 -m http.server 8070 -d dist` with `config.json` only.
 6. Every commit is signed off (DCO) and the repository contains no text in a language other than English.
 
 ## 15. Appendix: the CES 2027 adapters
