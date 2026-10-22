@@ -1,8 +1,7 @@
 import * as THREE from "three";
 import { toScene } from "./frames";
-import { ALERT_COLOR, setTransparent, STACK_LOST_FADE_S, STACK_LOST_OPACITY } from "./style";
+import { palette, setTransparent, STACK_LOST_FADE_S, STACK_LOST_OPACITY } from "./style";
 
-const TRAJ_COLOR = 0x22c55e; // green §6.5
 const DEFAULT_WIDTH_M = 1.9; // ego vehicle width fallback (design §5.2)
 const TRAJ_Y = 0.03; // just above road surface
 
@@ -20,7 +19,7 @@ export class TrajectoryRibbon {
   constructor(scene: THREE.Scene) {
     this.scene = scene;
     this.mat = new THREE.MeshBasicMaterial({
-      color: TRAJ_COLOR,
+      color: palette.traj,
       side: THREE.DoubleSide,
       depthWrite: false,
     });
@@ -42,7 +41,7 @@ export class TrajectoryRibbon {
   }
 
   setAlert(isAlert: boolean): void {
-    this.mat.color.setHex(isAlert ? ALERT_COLOR : TRAJ_COLOR);
+    this.mat.color.setHex(isAlert ? palette.alert : palette.traj);
   }
 
   // Start the fade to ghost opacity (design §6.3 Stack lost). tick() runs it.

@@ -1,10 +1,8 @@
 import * as THREE from "three";
 import { toScene } from "./frames";
-import { ALERT_COLOR, setTransparent, STACK_LOST_FADE_S, STACK_LOST_OPACITY } from "./style";
+import { palette, setTransparent, STACK_LOST_FADE_S, STACK_LOST_OPACITY } from "./style";
 
 export type RawLane = { kind: string; pts: [number, number][] };
-
-const LANE_COLOR = 0x22d3ee; // cyan §6.5
 
 type LaneLine = { kind: string; line: THREE.Line; capacity: number };
 
@@ -39,7 +37,7 @@ export class LaneManager {
     this.alertKinds = kinds;
     for (const { kind, line } of this.lines) {
       (line.material as THREE.LineBasicMaterial).color.setHex(
-        kinds.includes(kind) ? ALERT_COLOR : LANE_COLOR,
+        kinds.includes(kind) ? palette.alert : palette.lane,
       );
     }
   }
@@ -61,7 +59,7 @@ export class LaneManager {
     }
     while (this.lines.length < this.rawLanes.length) {
       const geom = new THREE.BufferGeometry();
-      const mat = new THREE.LineBasicMaterial({ color: LANE_COLOR });
+      const mat = new THREE.LineBasicMaterial({ color: palette.lane });
       const line = new THREE.Line(geom, mat);
       this.scene.add(line);
       this.lines.push({ kind: "", line, capacity: 0 });
@@ -75,7 +73,7 @@ export class LaneManager {
       if (entry.kind !== lane.kind) {
         entry.kind = lane.kind;
         (entry.line.material as THREE.LineBasicMaterial).color.setHex(
-          this.alertKinds.includes(lane.kind) ? ALERT_COLOR : LANE_COLOR,
+          this.alertKinds.includes(lane.kind) ? palette.alert : palette.lane,
         );
       }
 

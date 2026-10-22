@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { egoToScene } from "./frames";
-import { ALERT_COLOR, STACK_LOST_FADE_S, STACK_LOST_OPACITY } from "./style";
+import { cssHex, palette, STACK_LOST_FADE_S, STACK_LOST_OPACITY } from "./style";
 
 import carUrl from "../assets/meshes/car.glb?url";
 import suvUrl from "../assets/meshes/suv.glb?url";
@@ -45,10 +45,6 @@ const YAW_FIX = -Math.PI / 2;
 const FADE_IN_S = 0.3;
 const FADE_OUT_S = 0.5;
 
-// Design section 6.5: traffic blue, lead red.
-const TRAFFIC_COLOR = 0x3b82f6;
-const LEAD_COLOR = 0xef4444;
-
 // Shared geometry for unknown-class fallback boxes (design section 6.2).
 const BOX_GEOM = new THREE.BoxGeometry(1, 1, 1);
 
@@ -62,8 +58,6 @@ const RING_GEOM = (() => {
   }
   return new THREE.BufferGeometry().setFromPoints(pts);
 })();
-
-const LABEL_COLOR = "#ef4444"; // lead red §6.5, used in canvas text
 
 // Ego-frame record: raw detector position used to re-derive scene pose each
 // frame with the current ego pose, so objects track the moving ego correctly.
@@ -171,7 +165,7 @@ export class ObjectManager {
 
   private buildEntry(obj: RawObject): Entry {
     const isLead = obj.lead ?? false;
-    const color = isLead ? LEAD_COLOR : TRAFFIC_COLOR;
+    const color = isLead ? palette.lead : palette.traffic;
     const mats: THREE.MeshStandardMaterial[] = [];
     const meshes: THREE.Mesh[] = [];
     const outer = new THREE.Group();
@@ -245,7 +239,7 @@ export class ObjectManager {
       const newLead = obj.lead ?? false;
       if (newLead !== entry.isLead) {
         entry.isLead = newLead;
-        const color = newLead ? LEAD_COLOR : TRAFFIC_COLOR;
+        const color = newLead ? palette.lead : palette.traffic;
         for (const mat of entry.mats) mat.color.setHex(color);
       }
 
@@ -394,7 +388,7 @@ export class ObjectManager {
           const ctx = entry.labelCanvas!.getContext("2d")!;
           ctx.clearRect(0, 0, 128, 48);
           if (rounded >= 0) {
-            ctx.fillStyle = LABEL_COLOR;
+            ctx.fillStyle = cssHex(palette.lead);
             ctx.font = "bold 22px system-ui,sans-serif";
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
@@ -432,7 +426,7 @@ export class ObjectManager {
   setLeadAlert(show: boolean): void {
     for (const entry of this.tracked.values()) {
       if (show && entry.isLead && !entry.ring) {
-        const mat = new THREE.LineBasicMaterial({ color: ALERT_COLOR });
+        const mat = new THREE.LineBasicMaterial({ color: palette.alert });
         const ring = new THREE.LineLoop(RING_GEOM, mat);
         ring.position.y = 0.3; // just above ground in outer-local space
         entry.outer.add(ring);
@@ -440,6 +434,16 @@ export class ObjectManager {
       }
       // Update every entry so rings on former leads are hidden when the lead flag moves.
       if (entry.ring) entry.ring.visible = show && entry.isLead;
+    }
+  }
+
+  // Re-apply the palette after a theme change (design section 6.5, key t).
+  refreshColors(): void {
+    for (const entry of this.tracked.values()) {
+      const color = entry.isLead ? palette.lead : palette.traffic;
+      for (const mat of entry.mats) mat.color.setHex(color);
+      if (entry.ring) (entry.ring.material as THREE.LineBasicMaterial).color.setHex(palette.alert);
+      entry.lastLabelDistM = -1; // redraw the label in the new lead color
     }
   }
 
