@@ -5,14 +5,73 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ADAS dashboard</title>
     <style>
+      /* Color tokens (design section 6.5). The light theme (key t) only
+         redefines tokens; theme.ts copies the scene colors into three.js. */
       :root {
-        --bg: #0b0f14;
-        --fg: #94a3b8;
+        --bg-top: #0b0f14;
+        --bg-bottom: #1c2530;
+        --road: #161d26;
+        --map-lane: #4b5661;
         --lane: #22d3ee;
         --traj: #22c55e;
+        --traffic: #3b82f6;
         --lead: #ef4444;
+        --ego: #d9d9d9;
         --alert: #b91c1c;
         --takeover: #fb923c;
+        --ambient: #334455;
+        --fg: #94a3b8;
+        --fg-strong: #e2e8f0;
+        --panel-bg: rgba(11, 15, 20, 0.84);
+        --panel-border: #1e2a35;
+        --track: #1e2a35;
+        --center-mark: #4b5661;
+        --accel: #22c55e;
+        --brake: #ef4444;
+        --warn: #f59e0b;
+        --warn-bg: rgba(245, 158, 11, 0.15);
+        --warn-fg: #fcd34d;
+        --critical-bg: rgba(185, 28, 28, 0.2);
+        --critical-fg: #fca5a5;
+        --takeover-strong: #c2410c;
+        --on-takeover: #ffffff;
+        --takeover-text: #fdba74;
+        --pip-bg: #222222;
+        --pip-border: #666666;
+        --pip-fg: #888888;
+      }
+      :root[data-theme="light"] {
+        --bg-top: #cfd8e3;
+        --bg-bottom: #f1f5f9;
+        --road: #e8edf2;
+        --map-lane: #334155;
+        --lane: #0891b2;
+        --traj: #16a34a;
+        --traffic: #2563eb;
+        --lead: #dc2626;
+        --ego: #ffffff;
+        --alert: #b91c1c;
+        --takeover: #f97316;
+        --ambient: #ffffff;
+        --fg: #475569;
+        --fg-strong: #0f172a;
+        --panel-bg: rgba(255, 255, 255, 0.85);
+        --panel-border: #cbd5e1;
+        --track: #e2e8f0;
+        --center-mark: #94a3b8;
+        --accel: #16a34a;
+        --brake: #dc2626;
+        --warn: #d97706;
+        --warn-bg: rgba(245, 158, 11, 0.18);
+        --warn-fg: #92400e;
+        --critical-bg: rgba(185, 28, 28, 0.12);
+        --critical-fg: #991b1b;
+        --takeover-strong: #c2410c;
+        --on-takeover: #ffffff;
+        --takeover-text: #c2410c;
+        --pip-bg: #e2e8f0;
+        --pip-border: #94a3b8;
+        --pip-fg: #475569;
       }
       [hidden] {
         display: none !important;
@@ -21,13 +80,22 @@
       body {
         margin: 0;
         height: 100%;
-        background: var(--bg);
+        background: var(--bg-top);
         color: var(--fg);
         font-family: system-ui, sans-serif;
       }
       #scene {
         position: fixed;
         inset: 0;
+        background: linear-gradient(var(--bg-top), var(--bg-bottom));
+      }
+      /* Takeover and Stopped: amber page frame (design section 6.3) */
+      #frame {
+        position: fixed;
+        inset: 0;
+        border: calc(100vh * 12 / 1080) solid var(--takeover);
+        pointer-events: none;
+        z-index: 30;
       }
       /* Bottom-left column: HUD panel on top, connection status below it */
       #bottom-left {
@@ -84,14 +152,66 @@
         letter-spacing: 0.08em;
       }
       #alert-pill[data-severity="warn"] {
-        background: rgba(245, 158, 11, 0.15);
-        border: 1px solid #f59e0b;
-        color: #fcd34d;
+        background: var(--warn-bg);
+        border: 1px solid var(--warn);
+        color: var(--warn-fg);
       }
-      #alert-pill[data-severity="critical"] {
-        background: rgba(185, 28, 28, 0.2);
+      #alert-pill[data-severity="critical"],
+      #alert-pill[data-severity="lost"] {
+        background: var(--critical-bg);
         border: 1px solid var(--alert);
-        color: #fca5a5;
+        color: var(--critical-fg);
+      }
+      #alert-pill[data-severity="takeover"] {
+        background: var(--takeover-strong);
+        border: 1px solid var(--takeover-strong);
+        color: var(--on-takeover);
+      }
+
+      /* ------------------------------------------------------------------ */
+      /* Camera PiP — top right (design §6.1): about 230 by 130 px at 1080p  */
+      /* ------------------------------------------------------------------ */
+      #pip {
+        position: fixed;
+        top: 16px;
+        right: 16px;
+        width: calc(100vh * 230 / 1080);
+        height: calc(100vh * 130 / 1080);
+        background: var(--pip-bg);
+        border: 1px solid var(--pip-border);
+        overflow: hidden;
+        z-index: 20;
+      }
+      #pip-frame {
+        width: 100%;
+        height: 100%;
+        border: 0;
+        pointer-events: none; /* keep keyboard focus on the page */
+      }
+      #pip.lost #pip-frame {
+        opacity: 0.4;
+      }
+      #pip-lost {
+        position: absolute;
+        top: 8px;
+        left: 10px;
+        font-size: 14px;
+        color: var(--pip-fg);
+      }
+      #pip-min {
+        position: fixed;
+        top: 16px;
+        right: 16px;
+        width: 40px;
+        height: 20px;
+        border-radius: 999px;
+        background: var(--pip-bg);
+        border: 1px solid var(--pip-border);
+        color: var(--pip-fg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 20;
       }
 
       /* ------------------------------------------------------------------ */
@@ -99,8 +219,8 @@
       /* ------------------------------------------------------------------ */
       #hud {
         width: 220px;
-        background: rgba(11, 15, 20, 0.84);
-        border: 1px solid #1e2a35;
+        background: var(--panel-bg);
+        border: 1px solid var(--panel-border);
         border-radius: 8px;
         padding: 12px 14px;
         z-index: 10;
@@ -123,7 +243,7 @@
       #hud-speed {
         font-size: 46px;
         font-weight: 800;
-        color: #e2e8f0;
+        color: var(--fg-strong);
         line-height: 1;
         letter-spacing: -1px;
       }
@@ -132,9 +252,18 @@
         letter-spacing: 0.06em;
         margin-top: 2px;
       }
+      #hud-speed-arrow {
+        margin-left: 4px;
+      }
+      /* Takeover and Stopped: supervisor line (mockups 03 and 04) */
+      #hud-state-line {
+        padding: 4px 0;
+        font-size: 13px;
+        color: var(--takeover-text);
+      }
       /* Speed-limit box: small rounded badge */
       #hud-limit-box {
-        border: 2px solid #e2e8f0;
+        border: 2px solid var(--fg-strong);
         border-radius: 5px;
         padding: 3px 6px;
         display: flex;
@@ -145,7 +274,7 @@
       #hud-limit {
         font-size: 18px;
         font-weight: 700;
-        color: #e2e8f0;
+        color: var(--fg-strong);
         line-height: 1;
       }
       #hud-limit-unit {
@@ -157,7 +286,7 @@
       /* Divider between rows */
       .hud-divider {
         border: none;
-        border-top: 1px solid #1e2a35;
+        border-top: 1px solid var(--panel-border);
         margin: 6px 0;
       }
 
@@ -176,7 +305,7 @@
         min-width: 30px;
       }
       .hud-val {
-        color: #e2e8f0;
+        color: var(--fg-strong);
         font-weight: 600;
       }
       .hud-unit {
@@ -217,7 +346,7 @@
       .hud-pedal-half {
         flex: 1;
         height: 100%;
-        background: #1e2a35;
+        background: var(--track);
         overflow: hidden;
       }
       .hud-pedal-half.left {
@@ -231,27 +360,27 @@
       .hud-pedal-center {
         width: 2px;
         height: 100%;
-        background: #4b5661;
+        background: var(--center-mark);
         flex-shrink: 0;
       }
       #hud-accel-neg {
         height: 100%;
         width: 0%;
-        background: #ef4444; /* braking: red */
+        background: var(--brake);
         border-radius: 4px 0 0 4px;
         transition: width 0.08s linear;
       }
       #hud-accel-pos {
         height: 100%;
         width: 0%;
-        background: #22c55e; /* accelerating: green */
+        background: var(--accel);
         border-radius: 0 4px 4px 0;
         transition: width 0.08s linear;
       }
 
       /* Status line */
       #hud-status-row {
-        border-top: 1px solid #1e2a35;
+        border-top: 1px solid var(--panel-border);
         padding-top: 6px;
         margin-top: 4px;
         font-size: 11px;
@@ -262,10 +391,32 @@
         overflow: hidden;
         text-overflow: ellipsis;
       }
+      /* Takeover and Stopped: the pedal bar and status line turn amber (design §6.4) */
+      #hud.takeover #hud-accel-neg,
+      #hud.takeover #hud-accel-pos {
+        background: var(--takeover);
+      }
+      #hud.takeover #hud-status-row {
+        color: var(--takeover-text);
+        opacity: 1;
+      }
     </style>
   </head>
   <body>
     <div id="scene"></div>
+    <div id="frame" hidden></div>
+
+    <!-- Camera picture-in-picture — top right, key c (design §6.1) -->
+    <div id="pip">
+      <iframe id="pip-frame" title="camera" allow="autoplay" hidden></iframe>
+      <div id="pip-lost">camera lost</div>
+    </div>
+    <div id="pip-min" hidden>
+      <svg viewBox="0 0 16 12" width="16" height="12" aria-label="camera">
+        <rect x="0.5" y="2.5" width="10" height="8" rx="1.5" fill="none" stroke="currentColor" />
+        <path d="M11 5.5 L15.5 3 L15.5 10 L11 7.5 Z" fill="currentColor" />
+      </svg>
+    </div>
 
     <!-- Alert pill — top center -->
     <div id="alert-pill" hidden>
@@ -276,12 +427,14 @@
     <!-- Bottom-left column: HUD panel above, connection status below -->
     <div id="bottom-left">
       <!-- Status panel (design §6.1) -->
-      <div id="hud">
+      <div id="hud" hidden>
         <!-- Speed and speed limit -->
         <div class="hud-speed-row">
           <div class="hud-speed-block">
             <span id="hud-speed">--</span>
-            <span id="hud-speed-unit" class="hud-speed-unit">km/h</span>
+            <span class="hud-speed-unit"
+              ><span id="hud-speed-unit">km/h</span><span id="hud-speed-arrow" hidden>↓</span></span
+            >
           </div>
           <div id="hud-limit-box" hidden>
             <span id="hud-limit">--</span>
@@ -290,6 +443,9 @@
         </div>
 
         <hr class="hud-divider" />
+
+        <!-- Takeover and Stopped: what the supervisor is doing -->
+        <div id="hud-state-line" hidden></div>
 
         <!-- Lead vehicle distance and time gap -->
         <div id="hud-lead-row" hidden>

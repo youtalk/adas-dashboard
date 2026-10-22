@@ -7,6 +7,9 @@ export type HudData = {
   steeringRad: number; // CCW-positive (ego frame); positive = left turn
   accelMps2: number; // signed m/s²; positive = accelerating, negative = braking
   statusLine: string; // "<name> · <latency_ms> ms · <device>"
+  takeover: boolean; // Takeover or Stopped: amber pedal bar and status line (design §6.4)
+  speedFalling: boolean; // Takeover: down arrow next to the speed (design §6.3)
+  stateLine: string | null; // supervisor line, e.g. "Safety Island braking"; null hides it
 };
 
 // Full-scale for the pedal bar (design §6.4, to be tuned in W5 on the booth monitor).
@@ -15,6 +18,9 @@ const ACCEL_FULL_SCALE = 3; // m/s²
 const fmtInt = (n: number) => Math.round(n).toString();
 
 export class Hud {
+  private panel = document.getElementById("hud") as HTMLElement;
+  private arrowEl = document.getElementById("hud-speed-arrow") as HTMLElement;
+  private stateLineEl = document.getElementById("hud-state-line") as HTMLElement;
   private speedEl = document.getElementById("hud-speed")!;
   private speedUnitEl = document.getElementById("hud-speed-unit")!;
   private limitBox = document.getElementById("hud-limit-box") as HTMLElement;
@@ -28,9 +34,18 @@ export class Hud {
   private accelPosEl = document.getElementById("hud-accel-pos") as HTMLElement;
   private statusEl = document.getElementById("hud-status")!;
 
+  // Connecting shows nothing large (design §6.3), so the panel hides.
+  setVisible(visible: boolean): void {
+    this.panel.hidden = !visible;
+  }
+
   update(d: HudData): void {
     this.speedEl.textContent = fmtInt(d.speedDisplay);
     this.speedUnitEl.textContent = d.units;
+    this.arrowEl.hidden = !d.speedFalling;
+    this.panel.classList.toggle("takeover", d.takeover);
+    this.stateLineEl.hidden = d.stateLine === null;
+    this.stateLineEl.textContent = d.stateLine ?? "";
 
     if (d.limitDisplay !== null) {
       this.limitBox.hidden = false;
