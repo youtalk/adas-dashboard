@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { toScene } from "./frames";
-import { ALERT_COLOR, STACK_LOST_FADE_S, STACK_LOST_OPACITY } from "./style";
+import { ALERT_COLOR, setTransparent, STACK_LOST_FADE_S, STACK_LOST_OPACITY } from "./style";
 
 export type RawLane = { kind: string; pts: [number, number][] };
 
@@ -127,7 +127,7 @@ export class LaneManager {
     this.opacity = opacity;
     for (const { line } of this.lines) {
       const mat = line.material as THREE.LineBasicMaterial;
-      mat.transparent = opacity < 1;
+      setTransparent(mat, opacity < 1);
       mat.opacity = opacity;
     }
   }

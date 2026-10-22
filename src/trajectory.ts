@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { toScene } from "./frames";
-import { ALERT_COLOR, STACK_LOST_FADE_S, STACK_LOST_OPACITY } from "./style";
+import { ALERT_COLOR, setTransparent, STACK_LOST_FADE_S, STACK_LOST_OPACITY } from "./style";
 
 const TRAJ_COLOR = 0x22c55e; // green §6.5
 const DEFAULT_WIDTH_M = 1.9; // ego vehicle width fallback (design §5.2)
@@ -32,7 +32,7 @@ export class TrajectoryRibbon {
     this.frame = frame;
     // Restore full opacity after a stackLost ghost.
     this.lost = false;
-    this.mat.transparent = false;
+    setTransparent(this.mat, false);
     this.mat.opacity = 1;
   }
 
@@ -52,7 +52,7 @@ export class TrajectoryRibbon {
 
   tick(dt: number): void {
     if (this.lost && this.mat.opacity > STACK_LOST_OPACITY) {
-      this.mat.transparent = true;
+      setTransparent(this.mat, true);
       this.mat.opacity = Math.max(STACK_LOST_OPACITY, this.mat.opacity - dt / STACK_LOST_FADE_S);
     }
   }
