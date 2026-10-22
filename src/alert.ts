@@ -9,6 +9,25 @@ export type ActiveAlert = {
   target?: string;
 };
 
+type RawAlertEntry = { code: string; severity: string; text: string; target?: string };
+
+// Union of the warn and critical alerts in a set of alerts messages (design section 4).
+export function collectAlerts(msgs: Record<string, unknown>[]): ActiveAlert[] {
+  return msgs
+    .flatMap((m) => (m.alerts as RawAlertEntry[] | undefined) ?? [])
+    .filter((a) => a.severity === "warn" || a.severity === "critical")
+    .map((a) => ({
+      code: a.code,
+      severity: a.severity as AlertSeverity,
+      text: a.text,
+      target: a.target,
+    }));
+}
+
+// A state message that replaces the alert text (design section 6.3): "lost" for
+// Stack lost, "takeover" for Takeover and Stopped.
+export type Banner = { text: string; code?: string; kind: "lost" | "takeover"; opacity?: number };
+
 type PillState = "idle" | "active" | "holding";
 
 const HOLD_S = 0.5;
@@ -22,6 +41,8 @@ export class AlertPill {
   private holdTimer = 0;
   private pulseTime = 0;
   private heldAlerts: ActiveAlert[] = [];
+  private top: ActiveAlert | null = null;
+  private banner: Banner | null = null;
 
   constructor(
     el: HTMLElement = document.getElementById("alert-pill") as HTMLElement,
@@ -52,12 +73,25 @@ export class AlertPill {
     this.holdTimer = 0;
     this.severity = top.severity;
     this.heldAlerts = visible;
+    this.top = top;
+    if (!this.banner) this.showTop();
+  }
 
-    this.textEl.textContent = top.text;
-    this.codeEl.textContent = top.code;
-    this.el.dataset.severity = top.severity;
-    this.el.hidden = false;
-    this.el.style.opacity = "1";
+  // Show a state message instead of the alerts, or null to go back to them.
+  // The alert list keeps its hold timing underneath.
+  setBanner(banner: Banner | null): void {
+    const had = this.banner !== null;
+    this.banner = banner;
+    if (banner) {
+      this.textEl.textContent = banner.text;
+      this.codeEl.textContent = banner.code ?? "";
+      this.el.dataset.severity = banner.kind;
+      this.el.hidden = false;
+      this.el.style.opacity = String(banner.opacity ?? 1);
+    } else if (had) {
+      if (this.pillState === "idle") this.hide();
+      else this.showTop();
+    }
   }
 
   // Currently held alert list (non-empty while active or holding, empty when idle).
@@ -66,11 +100,25 @@ export class AlertPill {
     return this.heldAlerts;
   }
 
-  // Reset to idle immediately (call on stack reconnect).
+  // Reset to idle immediately (call on stack reconnect and on key r).
   reset(): void {
     this.pillState = "idle";
     this.heldAlerts = [];
+    this.top = null;
     this.holdTimer = 0;
+    if (!this.banner) this.hide();
+  }
+
+  private showTop(): void {
+    if (!this.top) return;
+    this.textEl.textContent = this.top.text;
+    this.codeEl.textContent = this.top.code;
+    this.el.dataset.severity = this.top.severity;
+    this.el.hidden = false;
+    this.el.style.opacity = "1";
+  }
+
+  private hide(): void {
     this.el.hidden = true;
     this.el.style.opacity = "1";
   }
@@ -79,7 +127,7 @@ export class AlertPill {
     if (this.pillState === "active") {
       this.pillState = "holding";
       this.holdTimer = 0;
-      this.el.style.opacity = "1";
+      if (!this.banner) this.el.style.opacity = "1";
     }
   }
 
@@ -91,11 +139,14 @@ export class AlertPill {
       if (this.holdTimer >= HOLD_S) {
         this.pillState = "idle";
         this.heldAlerts = [];
-        this.el.hidden = true;
-        this.el.style.opacity = "1";
+        this.top = null;
+        if (!this.banner) this.hide();
       }
       return;
     }
+
+    // A banner is steady; the pulse belongs to the Alert state only.
+    if (this.banner) return;
 
     // Active with critical severity: 1 Hz sine pulse (opacity 0.3 → 1.0).
     if (this.severity === "critical") {
