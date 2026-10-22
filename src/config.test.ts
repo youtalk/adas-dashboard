@@ -38,6 +38,19 @@ describe("loadConfig", () => {
     expect(c.theme).toBe("light");
   });
 
+  it("overrides a camera preset value", () => {
+    const q = new URLSearchParams("camera.chase.pitch_deg=30&camera.high.distance_m=80");
+    const c = loadConfig(q, file);
+    expect(c.camera.chase).toEqual({ pitch_deg: 30, distance_m: 18, lookahead_m: 12 });
+    expect(c.camera.high.distance_m).toBe(80);
+    expect(file.camera.chase.pitch_deg).toBe(25); // the file configuration is untouched
+  });
+
+  it("drops a camera preset value that is not a number", () => {
+    const q = new URLSearchParams("camera.chase.pitch_deg=steep&camera.chase.distance_m=");
+    expect(loadConfig(q, file)).toEqual(file);
+  });
+
   it("ignores unknown query keys", () => {
     const c = loadConfig(new URLSearchParams("foo=bar"), file);
     expect(c).toEqual(file);
