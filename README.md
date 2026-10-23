@@ -33,9 +33,11 @@ That plays the kill route once, which is what you want for the story. The stack 
 
 `--loop` instead gives an endless cruise loop. It is useful for camera and mesh work, and never for the kill. No endpoint ever closes under `--loop`. The stack file is 40 s and the world file is 55 s, so the two drift 15 s further apart every cycle. If the browser is not on the machine that runs the replay, add `--host 0.0.0.0`.
 
-In W0 the page only reads the configuration and prints the endpoint names. The WebSocket client arrives in W1. The page therefore looks the same whether or not the replay runs.
+Without `--loop` the page plays through all six states of design section 6.3: Connecting before the replay answers, Driving, Alert (lane departure at 12 s, forward collision warning at 23 s), Stack lost at 40 s, Takeover at 40.5 s and Stopped about a second after the car halts. Stopped holds until the stack reports `active` again, so restart the replay to see the fade back to Driving.
 
-The page reads `public/config.json`, which points at those two ports. Add `?stack=ws://...` to the URL to override an endpoint. Point `camera_url` at any URL you like. Its default is a dead port, which is how you exercise the "camera lost" rendering. Record live endpoints with `python3 -m tools.record stack=ws://host:port/path --out recordings/<name>`. Validate messages with `python3 -m tools.schema recordings/ces2027-kill-route/*.jsonl`.
+The page reads `public/config.json`, which points at those two ports. Query parameters override it key by key: `?stack=ws://...` sets an endpoint, `?units=km/h` and `?theme=light` set those keys, and `?camera.chase.pitch_deg=30` sets one camera preset value. Point `camera_url` at any URL you like. Its default is a dead port, which is how you exercise the "camera lost" rendering.
+
+Operator keys: `c` minimizes or restores the camera picture-in-picture, `t` switches the dark and light themes, `f` toggles fullscreen, `1` and `2` select the chase and high camera presets, and `r` clears Stopped and the alerts. Record live endpoints with `python3 -m tools.record stack=ws://host:port/path --out recordings/<name>`. Validate messages with `python3 -m tools.schema recordings/ces2027-kill-route/*.jsonl`.
 
 ## License
 

@@ -1,8 +1,7 @@
 import * as THREE from "three";
 import { toScene } from "./frames";
-import { ALERT_COLOR, STACK_LOST_FADE_S, STACK_LOST_OPACITY } from "./style";
+import { palette, setTransparent, STACK_LOST_FADE_S, STACK_LOST_OPACITY } from "./style";
 
-const TRAJ_COLOR = 0x22c55e; // green §6.5
 const DEFAULT_WIDTH_M = 1.9; // ego vehicle width fallback (design §5.2)
 const TRAJ_Y = 0.03; // just above road surface
 
@@ -20,7 +19,7 @@ export class TrajectoryRibbon {
   constructor(scene: THREE.Scene) {
     this.scene = scene;
     this.mat = new THREE.MeshBasicMaterial({
-      color: TRAJ_COLOR,
+      color: palette.traj,
       side: THREE.DoubleSide,
       depthWrite: false,
     });
@@ -32,7 +31,7 @@ export class TrajectoryRibbon {
     this.frame = frame;
     // Restore full opacity after a stackLost ghost.
     this.lost = false;
-    this.mat.transparent = false;
+    setTransparent(this.mat, false);
     this.mat.opacity = 1;
   }
 
@@ -42,7 +41,7 @@ export class TrajectoryRibbon {
   }
 
   setAlert(isAlert: boolean): void {
-    this.mat.color.setHex(isAlert ? ALERT_COLOR : TRAJ_COLOR);
+    this.mat.color.setHex(isAlert ? palette.alert : palette.traj);
   }
 
   // Start the fade to ghost opacity (design §6.3 Stack lost). tick() runs it.
@@ -52,7 +51,7 @@ export class TrajectoryRibbon {
 
   tick(dt: number): void {
     if (this.lost && this.mat.opacity > STACK_LOST_OPACITY) {
-      this.mat.transparent = true;
+      setTransparent(this.mat, true);
       this.mat.opacity = Math.max(STACK_LOST_OPACITY, this.mat.opacity - dt / STACK_LOST_FADE_S);
     }
   }

@@ -5,20 +5,27 @@ import {
   setRoles,
   recordMessage,
   closeEndpoint,
-  liveEndpoints,
-  closedEndpoints,
   latestByRole,
   allByRole,
+  newestOfType,
+  roleLost,
+  roleName,
+  clearType,
 } from "./state";
 import { createScene } from "./scene";
 import { createCameraController, type CameraController } from "./camera";
 import { mapToScene, yawToSceneRotation } from "./frames";
 import { ObjectManager, type RawObject } from "./objects";
 import { replaceEgoMesh } from "./ego";
-import { Hud, type HudData } from "./hud";
-import { AlertPill, type ActiveAlert } from "./alert";
+import { Hud, scaleWithViewport, type HudData } from "./hud";
+import { AlertPill, collectAlerts, type Banner } from "./alert";
 import { LaneManager, type RawLane } from "./lanes";
 import { TrajectoryRibbon } from "./trajectory";
+import { StateMachine, isGhost, readInputs, type PageState } from "./states";
+import { CameraPip } from "./pip";
+import { bindKeys, toggleFullscreen } from "./keys";
+import { applyTheme, type Theme } from "./theme";
+import { palette } from "./style";
 
 type PoseMap = { x: number; y: number; yaw: number };
 type EgoMsg = {
@@ -32,8 +39,7 @@ type MapMsg = { features: MapFeature[]; t_ms: number };
 type ObjectsMsg = { frame: "ego" | "map"; objects: RawObject[]; t_ms: number };
 type LanesMsg = { frame: "ego" | "map"; lanes: RawLane[]; t_ms: number };
 type TrajMsg = { frame: "ego" | "map"; pts: [number, number][]; width_m?: number; t_ms: number };
-type RawAlertEntry = { code: string; severity: string; text: string; target?: string };
-type AlertsMsg = { alerts: RawAlertEntry[] };
+type ControlMsg = { authority?: string; accel_mps2?: number };
 type StatusMsg = {
   name?: string;
   device?: string;
@@ -43,33 +49,43 @@ type StatusMsg = {
 };
 
 const status = document.getElementById("status")!;
+const credit = document.getElementById("credit")!;
+const frameEl = document.getElementById("frame")!;
 const rejected = new Map<string, number>();
-let pendingNames: string[] = [];
+let configError: string | null = null;
 
-// Roles per endpoint — needed in onClose to distinguish stack vs. other endpoint closes.
+// Roles per endpoint — needed in onMessage to tell a stack status from others.
 const endpointRoles = new Map<string, string[]>();
 
-function renderStatus() {
+// Bottom-left line (design section 6.3): the schema rejection reason,
+// "Waiting for vehicle..." while Connecting, or "vehicle link lost".
+function statusText(state: PageState): string {
+  if (configError) return configError;
   if (rejected.size > 0) {
     const [name, schema] = [...rejected.entries()][0];
-    status.textContent = `${name}: unsupported schema ${schema}`;
-    return;
+    return `${name}: unsupported schema ${schema}`;
   }
-  const live = liveEndpoints();
-  const lost = closedEndpoints();
-  if (live.length === 0 && lost.length === 0) {
-    status.textContent = `Waiting for vehicle... ${pendingNames.join(", ")}`;
-    return;
-  }
-  const parts: string[] = [];
-  if (live.length > 0) parts.push(`Connected: ${live.join(", ")}`);
-  if (lost.length > 0) parts.push(`lost: ${lost.join(", ")}`);
-  status.textContent = parts.join(" | ");
+  if (state === "connecting") return "Waiting for vehicle...";
+  if (roleLost("vehicle")) return "vehicle link lost";
+  return "";
+}
+
+// "<name> · <latency_ms> ms · <device>" (design section 6.4).
+function statusLineOf(s: StatusMsg | undefined, extra: string | null = null): string {
+  if (!s) return "";
+  return [s.name, s.latency_ms != null ? `${s.latency_ms} ms` : null, s.device, extra]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+// Signed acceleration with a typographic minus, e.g. "−3.0 m/s²".
+function fmtAccel(a: number): string {
+  return `${a < 0 ? "−" : ""}${Math.abs(a).toFixed(1)} m/s²`;
 }
 
 // --- scene bootstrap ---
 const container = document.getElementById("scene")!;
-const { scene, camera, renderer, egoMesh, road, light } = createScene(container);
+const { scene, camera, renderer, egoMesh, road, light, ambient } = createScene(container);
 
 let cameraController: CameraController | null = null;
 
@@ -77,7 +93,10 @@ const objManager = new ObjectManager(scene);
 const laneManager = new LaneManager(scene);
 const trajectory = new TrajectoryRibbon(scene);
 const hud = new Hud();
+scaleWithViewport(document.getElementById("bottom-left")!);
 const alertPill = new AlertPill();
+const machine = new StateMachine();
+const pip = new CameraPip();
 
 objManager.load().catch((e: unknown) => {
   console.warn("mesh load failed:", e);
@@ -89,7 +108,7 @@ replaceEgoMesh(egoMesh as THREE.Group).catch((e: unknown) => {
 
 // Map geometry: rebuilt only when a new map message arrives.
 const DRAWABLE_KINDS = new Set(["lane_solid", "lane_dashed", "road_edge"]);
-const mapLineMaterial = new THREE.LineBasicMaterial({ color: 0x4b5661 });
+const mapLineMaterial = new THREE.LineBasicMaterial({ color: palette.mapLane });
 const mapLines: THREE.Line[] = [];
 let lastMapTms: number | undefined;
 
@@ -120,6 +139,52 @@ function rebuildMapGeometry(mapMsg: MapMsg) {
   }
 }
 
+// --- theme (key t, design section 6.5) ---
+let theme: Theme = "dark";
+
+function setTheme(t: Theme) {
+  theme = t;
+  applyTheme(t);
+  (road.material as THREE.MeshStandardMaterial).color.setHex(palette.road);
+  mapLineMaterial.color.setHex(palette.mapLane);
+  ambient.color.setHex(palette.ambient);
+  egoMesh.traverse((child) => {
+    const m = child as THREE.Mesh;
+    if (m.isMesh) (m.material as THREE.MeshStandardMaterial).color.setHex(palette.ego);
+  });
+  objManager.refreshColors();
+  // Lanes and the trajectory re-read the palette every frame with their alert colors.
+}
+setTheme(theme);
+
+// --- operator keys (design section 7) ---
+bindKeys((action) => {
+  switch (action) {
+    case "pip":
+      pip.toggleMinimized();
+      break;
+    case "theme":
+      setTheme(theme === "dark" ? "light" : "dark");
+      break;
+    case "fullscreen":
+      toggleFullscreen();
+      break;
+    case "chase":
+    case "high":
+      cameraController?.setPreset(action);
+      break;
+    case "reset":
+      // Clear Stopped and the alerts. Control is cleared too, so a latched
+      // authority does not put the page straight back into Stopped; live
+      // endpoints re-establish it with their next control message.
+      machine.reset();
+      clearType("alerts");
+      clearType("control");
+      alertPill.reset();
+      break;
+  }
+});
+
 // Last known ego scene pose; persisted so ego-frame objects and lanes can
 // be updated in tick() even when pose_map is absent in the current frame.
 let egoSceneX = 0;
@@ -131,6 +196,8 @@ let lastLanesTms: number | undefined;
 let lastTrajTms: number | undefined;
 let lastTime: number | null = null;
 let units: "mph" | "km/h" = "km/h";
+let wasGhost = false;
+let lastStatusText = "";
 
 // Multiplier from m/s to the configured display unit.
 function toDisplay(mps: number) {
@@ -144,6 +211,25 @@ function animate() {
   const dt = lastTime !== null ? now - lastTime : 0;
   lastTime = now;
   let egoPoseChanged = false;
+
+  // --- alerts: union across all stack/supervisor endpoints ---
+  alertPill.setAlerts(
+    collectAlerts([...allByRole("stack", "alerts"), ...allByRole("supervisor", "alerts")]),
+  );
+
+  // --- page state (design section 6.3) ---
+  const state = machine.update(readInputs(alertPill.held.length > 0), dt);
+  const takeoverLook = state === "takeover" || state === "stopped";
+
+  // Stack lost, Takeover and Stopped: the stack layers fade to ghosts and hold.
+  // They come back with the first stack message after the state ends.
+  const ghost = isGhost(state);
+  if (ghost && !wasGhost) {
+    objManager.stackLost();
+    laneManager.stackLost();
+    trajectory.stackLost();
+  }
+  wasGhost = ghost;
 
   // --- ego vehicle ---
   const rawEgo = latestByRole("vehicle", "ego");
@@ -193,7 +279,7 @@ function animate() {
   // --- objects (outside pose_map block: ego-frame objects need updating even
   //     when the vehicle endpoint has no pose_map this frame) ---
   const rawObjects = latestByRole("stack", "objects");
-  if (rawObjects) {
+  if (rawObjects && !ghost) {
     const om = rawObjects as unknown as ObjectsMsg;
     if (om.t_ms !== lastObjectsTms) {
       lastObjectsTms = om.t_ms;
@@ -204,7 +290,7 @@ function animate() {
   // --- perceived lanes ---
   let lanesUpdated = false;
   const rawLanes = latestByRole("stack", "lanes");
-  if (rawLanes) {
+  if (rawLanes && !ghost) {
     const lm = rawLanes as unknown as LanesMsg;
     if (lm.t_ms !== lastLanesTms) {
       lastLanesTms = lm.t_ms;
@@ -220,7 +306,7 @@ function animate() {
   // --- trajectory ---
   let trajUpdated = false;
   const rawTraj = latestByRole("stack", "trajectory");
-  if (rawTraj) {
+  if (rawTraj && !ghost) {
     const tm = rawTraj as unknown as TrajMsg;
     if (tm.t_ms !== lastTrajTms) {
       lastTrajTms = tm.t_ms;
@@ -232,24 +318,6 @@ function animate() {
     trajectory.rebuild(egoSceneX, egoSceneZ, egoRawYaw);
   }
 
-  // --- alerts: union across all stack/supervisor endpoints ---
-  const alertMsgs = [
-    ...allByRole("stack", "alerts"),
-    ...allByRole("supervisor", "alerts"),
-  ] as unknown as AlertsMsg[];
-
-  const allAlerts: RawAlertEntry[] = alertMsgs.flatMap((m) => m.alerts ?? []);
-  const activeAlerts: ActiveAlert[] = allAlerts
-    .filter((a) => a.severity === "warn" || a.severity === "critical")
-    .map((a) => ({
-      code: a.code,
-      severity: a.severity as "warn" | "critical",
-      text: a.text,
-      target: a.target,
-    }));
-
-  alertPill.setAlerts(activeAlerts);
-
   // Apply alert targets to scene objects using the held list so the 500 ms
   // hold also covers the ring, trajectory, and lane colors (design §6.3).
   const targets = new Set(alertPill.held.map((a) => a.target).filter(Boolean) as string[]);
@@ -257,24 +325,53 @@ function animate() {
   trajectory.setAlert(targets.has("trajectory"));
   laneManager.setAlertKinds(["left", "right"].filter((kind) => targets.has(`lane_${kind}`)));
 
+  // --- who has control (Takeover and Stopped) ---
+  const control = newestOfType("control") as ControlMsg | undefined;
+  const supervisorName = roleName("supervisor") ?? "supervisor";
+  const supervisorStatus = latestByRole("supervisor", "status") as StatusMsg | undefined;
+  const controlAccel = control?.accel_mps2 ?? 0;
+
+  // --- pill: a state message replaces the alert text (design §6.3) ---
+  let banner: Banner | null = null;
+  if (state === "stack_lost") {
+    banner = { text: `${roleName("stack") ?? "Stack"} lost`, kind: "lost" };
+  } else if (state === "takeover") {
+    // The supervisor's own alert text, with the code in small print.
+    const msg = latestByRole("supervisor", "alerts");
+    const top = msg ? collectAlerts([msg])[0] : undefined;
+    banner = {
+      text: `⚠ ${top?.text ?? `${supervisorName} in control`}`,
+      code: top?.code,
+      kind: "takeover",
+    };
+  } else if (state === "stopped" || (machine.releaseFade > 0 && state !== "alert")) {
+    // Held until the stack reports active, then a 1 s fade back to Driving.
+    const opacity = state === "stopped" ? 1 : machine.releaseFade;
+    banner = { text: `Stopped by ${supervisorName}`, kind: "takeover", opacity };
+  }
+  alertPill.setBanner(banner);
+
+  // --- amber page frame ---
+  const frameOpacity = takeoverLook ? 1 : machine.releaseFade;
+  frameEl.hidden = frameOpacity === 0;
+  frameEl.style.opacity = String(frameOpacity);
+
   // --- stack status: speed limit and status line (live stack only) ---
-  const rawStatus = allByRole("stack", "status")[0] as unknown as StatusMsg | undefined;
-  const limitMps = rawStatus?.speed_limit_mps ?? null;
-  const statusLine = rawStatus
-    ? [
-        rawStatus.name,
-        rawStatus.latency_ms != null ? `${rawStatus.latency_ms} ms` : null,
-        rawStatus.device,
-      ]
-        .filter(Boolean)
-        .join(" · ")
-    : "";
+  const stackStatus = allByRole("stack", "status")[0] as unknown as StatusMsg | undefined;
+  const limitMps = stackStatus?.speed_limit_mps ?? null;
 
   // --- lead vehicle info (same number as the scene label) ---
   const leadDistM = objManager.leadDistM(egoSceneX, egoSceneZ);
   const leadGapS = leadDistM !== null && speedMps >= 0.5 ? leadDistM / speedMps : null;
 
-  // --- HUD ---
+  // --- HUD (design §6.4). In Takeover the pedal bar shows control.accel_mps2
+  //     and the status line shows the supervisor's status. ---
+  let stateLine: string | null = null;
+  if (state === "takeover") {
+    stateLine = controlAccel < 0 ? `${supervisorName} braking` : `${supervisorName} in control`;
+  } else if (state === "stopped") {
+    stateLine = "Stopped in lane";
+  }
   const hudData: HudData = {
     speedDisplay: toDisplay(speedMps),
     units,
@@ -282,10 +379,27 @@ function animate() {
     leadDistM,
     leadGapS,
     steeringRad: steerRad,
-    accelMps2,
-    statusLine,
+    accelMps2: takeoverLook ? controlAccel : accelMps2,
+    statusLine: takeoverLook
+      ? statusLineOf(supervisorStatus, state === "stopped" ? "holding" : fmtAccel(controlAccel))
+      : statusLineOf(stackStatus),
+    takeover: takeoverLook,
+    speedFalling: state === "takeover",
+    stateLine,
   };
+  hud.setVisible(state !== "connecting");
   hud.update(hudData);
+
+  // --- camera PiP, credit and the bottom-left line ---
+  pip.setStackLost(ghost);
+  // Design section 9: the credit shows in the Connecting state and in the light theme footer.
+  credit.hidden = !(state === "connecting" || theme === "light");
+  const text = statusText(state);
+  if (text !== lastStatusText) {
+    lastStatusText = text;
+    status.textContent = text;
+    status.hidden = text === "";
+  }
 
   objManager.tick(dt, egoSceneX, egoSceneZ, egoRawYaw);
   laneManager.tick(dt);
@@ -298,9 +412,9 @@ animate();
 // --- connection setup ---
 fetchConfig()
   .then((c) => {
-    pendingNames = Object.keys(c.endpoints);
     units = c.units;
-    renderStatus();
+    setTheme(c.theme);
+    pip.start(c.camera_url);
 
     cameraController = createCameraController(camera, c.camera);
 
@@ -316,28 +430,29 @@ fetchConfig()
             alertPill.reset();
           }
           endpointRoles.set(n, hello.roles);
-          setRoles(n, hello.roles);
-          renderStatus();
+          setRoles(n, hello.roles, hello.name);
         },
         onSchemaMismatch: (n, schema) => {
           rejected.set(n, schema);
-          renderStatus();
         },
         onMessage: (n, msg) => {
           recordMessage(n, msg);
+          // A stack status with mode "active" releases Stopped (design §6.3).
+          if (
+            msg.type === "status" &&
+            msg.mode === "active" &&
+            (endpointRoles.get(n) ?? []).includes("stack")
+          ) {
+            machine.stackActive();
+          }
         },
         onClose: (n) => {
+          // The state machine sees the closed stack and ghosts its layers.
           closeEndpoint(n);
-          if ((endpointRoles.get(n) ?? []).includes("stack")) {
-            objManager.stackLost();
-            laneManager.stackLost();
-            trajectory.stackLost();
-          }
-          renderStatus();
         },
       });
     }
   })
   .catch((e: unknown) => {
-    status.textContent = `config.json not loaded: ${String(e)}`;
+    configError = `config.json not loaded: ${String(e)}`;
   });
