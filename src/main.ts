@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { fetchConfig } from "./config";
-import { connectEndpoint } from "./ws";
+import { connectEndpoint, connectionStatus, rejected } from "./ws";
 import {
   setRoles,
   recordMessage,
@@ -51,20 +51,11 @@ type StatusMsg = {
 const status = document.getElementById("status")!;
 const credit = document.getElementById("credit")!;
 const frameEl = document.getElementById("frame")!;
-const rejected = new Map<string, number>();
 let configError: string | null = null;
 
-// Bottom-left line (design section 6.3): the schema rejection reason,
-// "Waiting for vehicle..." while Connecting, or "vehicle link lost".
+// Bottom-left line (design section 6.3).
 function statusText(state: PageState): string {
-  if (configError) return configError;
-  if (rejected.size > 0) {
-    const [name, schema] = [...rejected.entries()][0];
-    return `${name}: unsupported schema ${schema}`;
-  }
-  if (state === "connecting") return "Waiting for vehicle...";
-  if (roleLost("vehicle")) return "vehicle link lost";
-  return "";
+  return configError ?? connectionStatus(rejected, state === "connecting", roleLost("vehicle"));
 }
 
 // "<name> · <latency_ms> ms · <device>" (design section 6.4).
@@ -428,9 +419,6 @@ fetchConfig()
             alertPill.reset();
           }
           setRoles(n, hello.roles, hello.name);
-        },
-        onSchemaMismatch: (n, schema) => {
-          rejected.set(n, schema);
         },
         onMessage: (n, msg) => {
           recordMessage(n, msg);
