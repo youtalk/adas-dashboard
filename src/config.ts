@@ -16,16 +16,26 @@ const SCALAR_VALUES: Record<string, readonly string[]> = {
   theme: ["dark", "light"],
 };
 
-// Query keys that are not scalar keys are endpoint names (design section 7).
+// A camera preset value, for example camera.chase.pitch_deg=30, so the presets
+// can be tuned on the booth monitor without editing config.json.
+const PRESET_KEY = /^camera\.(chase|high)\.(pitch_deg|distance_m|lookahead_m)$/;
+
+// Query parameters override config.json key by key (design section 7). A ws://
+// or wss:// value names an endpoint; endpoint names are free.
 export function loadConfig(query: URLSearchParams, fileConfig: Config): Config {
   const c: Config = structuredClone(fileConfig);
   for (const [k, v] of query) {
+    const preset = PRESET_KEY.exec(k);
     if (v.startsWith("ws://") || v.startsWith("wss://")) {
       c.endpoints[k] = v;
     } else if ((SCALAR_KEYS as readonly string[]).includes(k)) {
       // Drop a value the type does not allow, so ?units=furlongs cannot lie to Config.
       if (SCALAR_VALUES[k] && !SCALAR_VALUES[k].includes(v)) continue;
       (c as unknown as Record<string, string>)[k] = v;
+    } else if (preset) {
+      const n = Number(v);
+      if (v.trim() === "" || !Number.isFinite(n)) continue;
+      c.camera[preset[1] as keyof Config["camera"]][preset[2] as keyof CameraPreset] = n;
     }
   }
   return c;

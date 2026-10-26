@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { AlertPill, type ActiveAlert } from "./alert";
+import { AlertPill, collectAlerts, type ActiveAlert } from "./alert";
 
 // ---------------------------------------------------------------------------
 // Minimal DOM element mock — no jsdom needed for pure state logic.
@@ -160,5 +160,68 @@ describe("AlertPill.tick — critical pulse", () => {
     pill.setAlerts([warn]);
     pill.tick(0.5);
     expect(parseFloat(el.style.opacity)).toBeCloseTo(1.0, 5);
+  });
+});
+
+describe("collectAlerts", () => {
+  it("unions the lists of every message and drops info", () => {
+    const got = collectAlerts([
+      {
+        type: "alerts",
+        alerts: [{ code: "FCW", severity: "critical", text: "Brake", target: "lead" }],
+      },
+      { type: "alerts", alerts: [{ code: "SI", severity: "info", text: "standby" }] },
+      { type: "alerts", alerts: [{ code: "LLDW", severity: "warn", text: "Lane" }] },
+    ]);
+    expect(got.map((a) => a.code)).toEqual(["FCW", "LLDW"]);
+    expect(got[0].target).toBe("lead");
+  });
+
+  it("treats a message without a list as empty", () => {
+    expect(collectAlerts([{ type: "alerts" }])).toEqual([]);
+  });
+});
+
+describe("AlertPill.setBanner", () => {
+  it("shows the banner over an active alert and returns to the alert after", () => {
+    const { pill, el, textEl } = makePill();
+    pill.setAlerts([crit]);
+    pill.setBanner({ text: "VisionPilot lost", kind: "lost" });
+    expect(el.dataset.severity).toBe("lost");
+    expect(textEl.textContent).toBe("VisionPilot lost");
+    pill.setAlerts([crit]); // alerts keep arriving under the banner
+    expect(textEl.textContent).toBe("VisionPilot lost");
+    pill.setBanner(null);
+    expect(el.dataset.severity).toBe("critical");
+    expect(textEl.textContent).toBe(crit.text);
+  });
+
+  it("hides the pill when the banner ends and no alert is held", () => {
+    const { pill, el } = makePill();
+    pill.setBanner({ text: "Stopped by Safety Island", kind: "takeover" });
+    expect(el.hidden).toBe(false);
+    pill.setBanner(null);
+    expect(el.hidden).toBe(true);
+  });
+
+  it("does not pulse and applies the banner opacity", () => {
+    const { pill, el, codeEl } = makePill();
+    pill.setAlerts([crit]);
+    pill.setBanner({ text: "x", code: "SI_STOP", kind: "takeover", opacity: 0.4 });
+    pill.tick(0.25);
+    expect(parseFloat(el.style.opacity)).toBeCloseTo(0.4, 5);
+    expect(codeEl.textContent).toBe("SI_STOP");
+  });
+
+  it("keeps the hold timing of the alerts under a banner", () => {
+    const { pill, el } = makePill();
+    pill.setAlerts([warn]);
+    pill.setBanner({ text: "x", kind: "lost" });
+    pill.setAlerts([]);
+    pill.tick(0.51);
+    expect(pill.held).toEqual([]);
+    expect(el.hidden).toBe(false); // the banner is still up
+    pill.setBanner(null);
+    expect(el.hidden).toBe(true);
   });
 });

@@ -6,13 +6,13 @@ type Presets = { chase: CameraPreset; high: CameraPreset };
 
 export type CameraController = {
   update: (egoX: number, egoY: number, egoZ: number, yaw: number) => void;
-  dispose: () => void;
+  setPreset: (name: keyof Presets) => void;
 };
 
 const YAW_TAU = 0.3; // seconds — time constant for the exponential yaw lerp
 
 // Creates a chase-camera controller driven by ego pose.
-// Keys 1 and 2 switch between the chase and high presets (design section 7).
+// keys.ts maps keys 1 and 2 to the chase and high presets (design section 7).
 export function createCameraController(
   camera: PerspectiveCamera,
   presets: Presets,
@@ -20,12 +20,6 @@ export function createCameraController(
   let active: CameraPreset = presets.chase;
   let lerpedYaw = 0;
   let lastTime: number | null = null;
-
-  function onKeyDown(e: KeyboardEvent) {
-    if (e.key === "1") active = presets.chase;
-    else if (e.key === "2") active = presets.high;
-  }
-  window.addEventListener("keydown", onKeyDown);
 
   function update(egoX: number, egoY: number, egoZ: number, yaw: number) {
     const now = performance.now() / 1000;
@@ -52,9 +46,9 @@ export function createCameraController(
     camera.lookAt(egoX + h.x * lookahead_m, egoY, egoZ + h.z * lookahead_m);
   }
 
-  function dispose() {
-    window.removeEventListener("keydown", onKeyDown);
+  function setPreset(name: keyof Presets) {
+    active = presets[name];
   }
 
-  return { update, dispose };
+  return { update, setPreset };
 }
