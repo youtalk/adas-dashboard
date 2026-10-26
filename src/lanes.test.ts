@@ -6,8 +6,8 @@ function makeScene() {
   return new THREE.Scene();
 }
 
-function laneLines(scene: THREE.Scene): THREE.Line[] {
-  return scene.children.filter((c) => c instanceof THREE.Line) as THREE.Line[];
+function laneLines(scene: THREE.Scene): THREE.Mesh[] {
+  return scene.children.filter((c) => c instanceof THREE.Mesh) as THREE.Mesh[];
 }
 
 const leftLane: RawLane = {
@@ -40,7 +40,7 @@ describe("LaneManager — scene management", () => {
     mgr = new LaneManager(scene);
   });
 
-  it("adds one THREE.Line per lane boundary after rebuild", () => {
+  it("adds one strip mesh per lane boundary after rebuild", () => {
     mgr.setMsg([leftLane, rightLane], "ego");
     mgr.rebuild(0, 0, 0);
     expect(laneLines(scene).length).toBe(2);
@@ -75,7 +75,7 @@ describe("LaneManager — scene management", () => {
     mgr.setMsg([leftLane, rightLane], "ego");
     mgr.rebuild(0, 0, 0);
     mgr.stackLost();
-    const mats = laneLines(scene).map((l) => l.material as THREE.LineBasicMaterial);
+    const mats = laneLines(scene).map((l) => l.material as THREE.MeshBasicMaterial);
     expect(mats[0].opacity).toBe(1); // no jump on the stackLost frame
     mgr.tick(0.25);
     expect(mats[0].opacity).toBeCloseTo(0.5, 2);
@@ -136,8 +136,10 @@ describe("LaneManager — ego-frame transform", () => {
     mgr.rebuild(0, 0, 0); // ego at origin, yaw=0
     const line = laneLines(scene)[0];
     const pos = line.geometry.attributes.position as THREE.BufferAttribute;
-    // Point 0: ego (x=10, y=1.75) → scene (x=1.75, z=10)
-    expect(pos.getX(0)).toBeCloseTo(1.75, 3);
+    // Point 0: ego (x=10, y=1.75) → scene (x=1.75, z=10), between the strip's
+    // first two vertices, which are 0.15 m apart across the lane.
+    expect((pos.getX(0) + pos.getX(1)) / 2).toBeCloseTo(1.75, 3);
+    expect(Math.abs(pos.getX(0) - pos.getX(1))).toBeCloseTo(0.15, 3);
     expect(pos.getZ(0)).toBeCloseTo(10, 3);
   });
 
@@ -181,7 +183,7 @@ describe("LaneManager — map-frame transform", () => {
     mgr.rebuild(0, 0, 0); // ego pose irrelevant for map frame
     const pos = laneLines(scene)[0].geometry.attributes.position as THREE.BufferAttribute;
     // mapToScene(100, 50) → { x: 50, z: 100 }
-    expect(pos.getX(0)).toBeCloseTo(50, 3);
+    expect((pos.getX(0) + pos.getX(1)) / 2).toBeCloseTo(50, 3);
     expect(pos.getZ(0)).toBeCloseTo(100, 3);
   });
 });
@@ -199,13 +201,13 @@ describe("LaneManager — alert coloring", () => {
     const lines = laneLines(scene);
     // Before alert: both lines should be the cyan lane color (0x22d3ee).
     const leftLine = lines.find((_, i) => {
-      const m = scene.children.filter((c) => c instanceof THREE.Line)[i];
+      const m = scene.children.filter((c) => c instanceof THREE.Mesh)[i];
       return m === lines[0];
     });
     mgr.setAlertKinds(["left"]);
     const mats = scene.children
-      .filter((c) => c instanceof THREE.Line)
-      .map((c) => (c as THREE.Line).material as THREE.LineBasicMaterial);
+      .filter((c) => c instanceof THREE.Mesh)
+      .map((c) => (c as THREE.Mesh).material as THREE.MeshBasicMaterial);
     const redMat = mats.find((m) => m.color.getHex() === 0xb91c1c);
     const cyanMat = mats.find((m) => m.color.getHex() === 0x22d3ee);
     expect(redMat).toBeDefined();
@@ -219,7 +221,7 @@ describe("LaneManager — alert coloring", () => {
     mgr.rebuild(0, 0, 0);
     mgr.setAlertKinds(["left"]);
     mgr.setAlertKinds([]);
-    const mat = laneLines(scene)[0].material as THREE.LineBasicMaterial;
+    const mat = laneLines(scene)[0].material as THREE.MeshBasicMaterial;
     expect(mat.color.getHex()).toBe(0x22d3ee);
   });
 
@@ -230,7 +232,7 @@ describe("LaneManager — alert coloring", () => {
     mgr.rebuild(0, 0, 0);
     mgr.setAlertKinds(["left", "right"]);
     for (const line of laneLines(scene)) {
-      expect((line.material as THREE.LineBasicMaterial).color.getHex()).toBe(0xb91c1c);
+      expect((line.material as THREE.MeshBasicMaterial).color.getHex()).toBe(0xb91c1c);
     }
   });
 });

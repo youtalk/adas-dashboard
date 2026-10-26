@@ -155,7 +155,7 @@ describe("ObjectManager fade", () => {
     mgr.update([makeObj(1, true), makeObj(2, false)], "map");
     mgr.tick(0.3, 0, 0, 0);
     mgr.setLeadAlert(true); // id 1 gets a ring
-    const tracked = (mgr as unknown as { tracked: Map<number, { ring: THREE.LineLoop | null }> })
+    const tracked = (mgr as unknown as { tracked: Map<number, { ring: THREE.Mesh | null }> })
       .tracked;
     expect(tracked.get(1)!.ring?.visible).toBe(true);
 
@@ -165,6 +165,31 @@ describe("ObjectManager fade", () => {
     mgr.setLeadAlert(true); // id 2 should get ring, id 1's ring should be hidden
     expect(tracked.get(1)!.ring?.visible).toBe(false);
     expect(tracked.get(2)!.ring?.visible).toBe(true);
+  });
+
+  it("draws the lead alert ring as a flat 0.15 m wide circle on the ground", () => {
+    mgr.update([{ ...makeObj(1, true), x: 10, y: 2 }], "map"); // scene x = 2, z = 10
+    mgr.tick(0.3, 0, 0, 0);
+    mgr.setLeadAlert(true);
+    mgr.tick(0, 0, 0, 0);
+    const ring = (
+      mgr as unknown as { tracked: Map<number, { ring: THREE.Mesh | null }> }
+    ).tracked.get(1)!.ring!;
+    const { innerRadius, outerRadius } = (ring.geometry as THREE.RingGeometry).parameters;
+    expect(outerRadius - innerRadius).toBeCloseTo(0.15);
+    expect((innerRadius + outerRadius) / 2).toBeCloseTo(3); // 0.75 × max(length 4, width 2)
+
+    // In world space: a circle around the car, not stretched by its size, on the ground.
+    scene.updateMatrixWorld();
+    const box = new THREE.Box3().setFromObject(ring);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    expect(size.x).toBeCloseTo(2 * outerRadius, 1);
+    expect(size.z).toBeCloseTo(2 * outerRadius, 1);
+    expect(size.y).toBeCloseTo(0);
+    expect(center.x).toBeCloseTo(2);
+    expect(center.z).toBeCloseTo(10);
+    expect(center.y).toBeLessThan(0.1);
   });
 
   it("label sprite fades with the car when the stack is lost", () => {

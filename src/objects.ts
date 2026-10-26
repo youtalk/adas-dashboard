@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { egoToScene } from "./frames";
-import { cssHex, palette, STACK_LOST_FADE_S, STACK_LOST_OPACITY } from "./style";
+import { cssHex, LINE_WIDTH_M, palette, STACK_LOST_FADE_S, STACK_LOST_OPACITY } from "./style";
 
 import carUrl from "../assets/meshes/car.glb?url";
 import suvUrl from "../assets/meshes/suv.glb?url";
@@ -48,16 +48,8 @@ const FADE_OUT_S = 0.5;
 // Shared geometry for unknown-class fallback boxes (design section 6.2).
 const BOX_GEOM = new THREE.BoxGeometry(1, 1, 1);
 
-// Lead vehicle: alert ring geometry (unit circle lying flat, shared across all instances).
-const RING_GEOM = (() => {
-  const pts: THREE.Vector3[] = [];
-  const segs = 40;
-  for (let i = 0; i <= segs; i++) {
-    const theta = (i / segs) * Math.PI * 2;
-    pts.push(new THREE.Vector3(Math.cos(theta) * 1.2, 0, Math.sin(theta) * 1.2));
-  }
-  return new THREE.BufferGeometry().setFromPoints(pts);
-})();
+// Lead vehicle alert ring height: on the ground, just above the trajectory (0.03 m).
+const RING_Y = 0.04;
 
 // Ego-frame record: raw detector position used to re-derive scene pose each
 // frame with the current ego pose, so objects track the moving ego correctly.
@@ -79,7 +71,7 @@ type Entry = {
   prev: EgoRecord | SceneRecord | null;
   curr: EgoRecord | SceneRecord | null;
   // Lead vehicle extras (created lazily when isLead first becomes true).
-  ring: THREE.LineLoop | null; // alert ring, child of outer
+  ring: THREE.Mesh | null; // alert ring, direct child of scene
   labelSprite: THREE.Sprite | null; // distance label, direct child of scene
   labelCanvas: HTMLCanvasElement | null;
   labelTexture: THREE.CanvasTexture | null;
@@ -349,6 +341,7 @@ export class ObjectManager {
 
         entry.outer.position.set(x, 0, z);
         entry.outer.rotation.y = ry;
+        entry.ring?.position.set(x, RING_Y, z);
       }
 
       for (const mat of entry.mats) mat.opacity = entry.opacity;
@@ -426,10 +419,14 @@ export class ObjectManager {
   setLeadAlert(show: boolean): void {
     for (const entry of this.tracked.values()) {
       if (show && entry.isLead && !entry.ring) {
-        const mat = new THREE.LineBasicMaterial({ color: palette.alert });
-        const ring = new THREE.LineLoop(RING_GEOM, mat);
-        ring.position.y = 0.3; // just above ground in outer-local space
-        entry.outer.add(ring);
+        // A flat circle of paint around the car. It is a scene child so the
+        // car's size scale on outer does not stretch it into an ellipse.
+        const r = 0.75 * Math.max(entry.outer.scale.x, entry.outer.scale.z);
+        const geom = new THREE.RingGeometry(r - LINE_WIDTH_M / 2, r + LINE_WIDTH_M / 2, 64);
+        geom.rotateX(-Math.PI / 2); // lie flat, facing up
+        const ring = new THREE.Mesh(geom, new THREE.MeshBasicMaterial({ color: palette.alert }));
+        ring.position.set(entry.outer.position.x, RING_Y, entry.outer.position.z);
+        this.scene.add(ring);
         entry.ring = ring;
       }
       // Update every entry so rings on former leads are hidden when the lead flag moves.
@@ -442,7 +439,7 @@ export class ObjectManager {
     for (const entry of this.tracked.values()) {
       const color = entry.isLead ? palette.lead : palette.traffic;
       for (const mat of entry.mats) mat.color.setHex(color);
-      if (entry.ring) (entry.ring.material as THREE.LineBasicMaterial).color.setHex(palette.alert);
+      if (entry.ring) (entry.ring.material as THREE.MeshBasicMaterial).color.setHex(palette.alert);
       entry.lastLabelDistM = -1; // redraw the label in the new lead color
     }
   }
@@ -463,7 +460,9 @@ export class ObjectManager {
       (entry.labelSprite.material as THREE.SpriteMaterial).dispose();
     }
     if (entry.ring) {
-      (entry.ring.material as THREE.LineBasicMaterial).dispose();
+      this.scene.remove(entry.ring);
+      entry.ring.geometry.dispose();
+      (entry.ring.material as THREE.MeshBasicMaterial).dispose();
     }
   }
 
