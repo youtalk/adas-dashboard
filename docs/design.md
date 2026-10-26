@@ -73,6 +73,7 @@ The schema is versioned. JSON Schema files live in `schema/v1/`. The page reject
 - Units: meters, radians, meters per second, meters per second squared. Angles are counterclockwise positive.
 - Frames: `ego` is x forward, y left, z up, origin at the center of the ego vehicle's rear axle on the ground. `map` is the map's own fixed frame. A message with geometry names its frame. If no `vehicle` message with `pose_map` exists, `map` frame geometry is not drawn.
 - Fields marked `?` are optional. Unknown fields are ignored.
+- The page drops a message of a known type when a required array field is not an array or a required number field is not a number, so one malformed message cannot freeze the screen.
 
 ### 5.2 Messages
 
