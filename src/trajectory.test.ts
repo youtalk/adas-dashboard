@@ -152,7 +152,7 @@ describe("TrajectoryRibbon — ego-frame tracking", () => {
 // ---------------------------------------------------------------------------
 
 describe("TrajectoryRibbon — stackLost", () => {
-  it("stackLost fades the ribbon to 0.15 over 500 ms and stops following ego", () => {
+  it("stackLost fades the ribbon from 0.4 to 0.08 over 500 ms and stops following ego", () => {
     const scene = makeScene();
     const ribbon = new TrajectoryRibbon(scene);
     ribbon.setMsg(
@@ -168,12 +168,14 @@ describe("TrajectoryRibbon — stackLost", () => {
     ribbon.stackLost();
     expect(ribbon.followsEgo).toBe(false);
     const mat = ribbonMesh(scene)!.material as THREE.MeshBasicMaterial;
-    expect(mat.opacity).toBe(1); // no jump on the stackLost frame
-    ribbon.tick(0.25);
-    expect(mat.opacity).toBeCloseTo(0.5, 2);
-    ribbon.tick(1.0);
     expect(mat.transparent).toBe(true);
-    expect(mat.opacity).toBeCloseTo(0.15, 2);
+    expect(mat.opacity).toBe(0.4); // no jump on the stackLost frame
+    ribbon.tick(0.25);
+    expect(mat.opacity).toBeCloseTo(0.24, 2);
+    ribbon.tick(1.0);
+    expect(mat.opacity).toBeCloseTo(0.08, 2);
+    ribbon.setMsg([], undefined, "ego"); // the stack is back
+    expect(mat.opacity).toBe(0.4);
   });
 
   it("a map-frame ribbon does not follow ego", () => {
