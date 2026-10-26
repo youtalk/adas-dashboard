@@ -17,14 +17,6 @@ const ACCEL_FULL_SCALE = 3; // m/s²
 
 const fmtInt = (n: number) => Math.round(n).toString();
 
-// The bottom-left panel is laid out for a 1080 px tall viewport and scales with
-// the viewport height times ui_scale (design §6.1).
-const DESIGN_HEIGHT_PX = 1080;
-
-export function viewportScale(viewportHeight: number, uiScale = 1): number {
-  return (viewportHeight / DESIGN_HEIGHT_PX) * uiScale;
-}
-
 export class Hud {
   private panel = document.getElementById("hud") as HTMLElement;
   private arrowEl = document.getElementById("hud-speed-arrow") as HTMLElement;

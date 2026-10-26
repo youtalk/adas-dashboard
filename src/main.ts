@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { DEFAULT_UI_SCALE, fetchConfig } from "./config";
+import { fetchConfig } from "./config";
 import { connectEndpoint } from "./ws";
 import {
   setRoles,
@@ -17,7 +17,7 @@ import { createCameraController, type CameraController } from "./camera";
 import { mapToScene, yawToSceneRotation } from "./frames";
 import { ObjectManager, type RawObject } from "./objects";
 import { replaceEgoMesh } from "./ego";
-import { Hud, viewportScale, type HudData } from "./hud";
+import { Hud, type HudData } from "./hud";
 import { AlertPill, collectAlerts, type Banner } from "./alert";
 import { LaneManager, type RawLane } from "./lanes";
 import { TrajectoryRibbon } from "./trajectory";
@@ -90,18 +90,6 @@ const objManager = new ObjectManager(scene);
 const laneManager = new LaneManager(scene);
 const trajectory = new TrajectoryRibbon(scene);
 const hud = new Hud();
-// ui_scale sizes the overlays (design §6.1). CSS sizes the PiP and the pill from
-// --ui-scale. The bottom-left panel uses zoom, which, unlike transform: scale(),
-// also scales the layout box, so the panel and the status line under it keep
-// their spacing at every size.
-const bottomLeft = document.getElementById("bottom-left")!;
-let uiScale = DEFAULT_UI_SCALE;
-function fitUi() {
-  document.documentElement.style.setProperty("--ui-scale", String(uiScale));
-  bottomLeft.style.setProperty("zoom", String(viewportScale(window.innerHeight, uiScale)));
-}
-fitUi();
-window.addEventListener("resize", fitUi);
 const alertPill = new AlertPill();
 const machine = new StateMachine();
 const pip = new CameraPip();
@@ -422,8 +410,6 @@ animate();
 fetchConfig()
   .then((c) => {
     units = c.units;
-    uiScale = c.ui_scale ?? DEFAULT_UI_SCALE;
-    fitUi();
     setTheme(c.theme);
     pip.start(c.camera_url);
 

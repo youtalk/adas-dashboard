@@ -309,7 +309,7 @@ This adapter is a future task in `adapters/autoware/`, not part of the CES 2027 
 
 ![Driving state](mockups/01-driving.png)
 
-The scene fills the page at any aspect ratio. The booth monitor is 1920 by 1080. The status panel (bottom left) is about 240 by 170 px at that size and scales with the viewport height. The camera picture-in-picture (top right) is about 230 by 130 px. The `c` key minimizes it to a 40 px pill. These sizes are for `ui_scale` 1. The status panel, the camera picture-in-picture and the pill scale with the viewport height times `ui_scale` (section 7), which is 2 by default. It is an `<iframe>` of the raw camera stream URL given in the configuration. The page draws nothing on top of the camera image.
+The scene fills the page at any aspect ratio. The booth monitor is 1920 by 1080. The status panel (bottom left) is about 480 by 340 px at that size. The camera picture-in-picture (top right) is about 460 by 260 px. It is an `<iframe>` of the raw camera stream URL given in the configuration. The page draws nothing on top of the camera image. The `c` key minimizes it to an 80 px pill. These sizes are CSS px, so browser zoom (Ctrl + and Ctrl −) makes the status panel, the camera picture-in-picture and the pill larger or smaller on each screen. The browser keeps the zoom for the site. The scene does not change with the zoom.
 
 ### 6.2 Layers
 
@@ -350,7 +350,7 @@ Bottom left, in this order. Speed as a large number with the unit. The speed lim
 
 Dark matte by default. Background gradient `#0b0f14` to `#1c2530`. Road `#161d26`. Map lanes `#4b5661`. Perceived lanes `#22d3ee`. Trajectory `#22c55e`. Traffic `#3b82f6`. Lead vehicle `#ef4444`. Ego `#d9d9d9`. Alert `#b91c1c`. Takeover `#fb923c`. All colors are CSS custom properties so the light theme (`t` key) only redefines tokens. Meshes use a flat material with one directional key light and a soft contact shadow. No bloom, no post-processing.
 
-Text in the scene uses a system sans-serif font. The pill text is at least 20 px at 1080p and `ui_scale` 1. A long pill text wraps to more lines and stays clear of the camera picture-in-picture. The speed number is at least 40 px.
+Text in the scene uses a system sans-serif font. The pill text is 40 px at browser zoom 100%. A long pill text wraps to more lines and stays clear of the camera picture-in-picture. The speed number is at least 40 px.
 
 ## 7. Operator controls and configuration
 
@@ -373,7 +373,6 @@ Keyboard only, no on-screen buttons:
   "camera_url": "http://192.168.0.20:8080/",
   "units": "mph",
   "theme": "dark",
-  "ui_scale": 2,
   "camera": {
     "chase": { "pitch_deg": 25, "distance_m": 18, "lookahead_m": 12 },
     "high": { "pitch_deg": 50, "distance_m": 60, "lookahead_m": 30 }
@@ -381,7 +380,7 @@ Keyboard only, no on-screen buttons:
 }
 ```
 
-URL query parameters override `config.json` key by key. `ui_scale` sets the size of the status panel, the camera picture-in-picture and the pill (section 6.1). It is 2 when the key is absent, and `index.html?ui_scale=1.5` makes them smaller on one screen.
+URL query parameters override `config.json` key by key.
 
 ## 8. Frontend stack and repository layout
 

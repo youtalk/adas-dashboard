@@ -76,11 +76,11 @@
       [hidden] {
         display: none !important;
       }
-      /* Overlay size (design section 6.1): --u is one px of the 1080p layout,
-         times ui_scale. main.ts sets --ui-scale from the configuration. */
+      /* Overlay size (design section 6.1): twice the 1080p layout in CSS px, so
+         browser zoom makes the overlays larger or smaller. --u is one layout px. */
       :root {
-        --ui-scale: 2;
-        --u: calc(var(--ui-scale) * 100vh / 1080);
+        --ui: 2;
+        --u: calc(var(--ui) * 1px);
       }
       html,
       body {
@@ -104,9 +104,10 @@
         z-index: 30;
       }
       /* Bottom-left column: HUD panel on top, connection status below it.
-         Sized for a 1080 px tall viewport; main.ts sets zoom to scale it with
-         the viewport height and ui_scale (design §6.1). */
+         zoom, unlike transform: scale(), also scales the layout box, so the panel
+         and the status line under it keep their spacing (design §6.1). */
       #bottom-left {
+        zoom: var(--ui);
         position: fixed;
         left: 16px;
         bottom: 16px;
@@ -183,7 +184,7 @@
       }
 
       /* ------------------------------------------------------------------ */
-      /* Camera PiP — top right (design §6.1): 230 by 130 px at 1080p, x ui_scale */
+      /* Camera PiP — top right (design §6.1): 230 by 130 layout px              */
       /* ------------------------------------------------------------------ */
       #pip {
         position: fixed;
