@@ -1,11 +1,12 @@
 // Page states (design section 6.3). Two independent signals decide the state:
 // whether the stack endpoint is alive, and who has control.authority.
-import { anyHello, hasRole, latestByRole, newestOfType, stackAlive } from "./state";
+import { anyHello, hasRole, latestByRole, newestOfType, roleSeen, stackAlive } from "./state";
 
 export type PageState = "connecting" | "driving" | "alert" | "stack_lost" | "takeover" | "stopped";
 
 export type StateInputs = {
   anyHello: boolean;
+  stackSeen: boolean; // a stack endpoint has said hello at least once
   stackAlive: boolean;
   authority: string; // newest control.authority, "stack" when no control has arrived
   alertActive: boolean; // a warn or critical alert is shown (including the 500 ms hold)
@@ -29,6 +30,7 @@ export function readInputs(alertActive: boolean): StateInputs {
   const ego = latestByRole("vehicle", "ego") as { speed_mps?: number } | undefined;
   return {
     anyHello: anyHello(),
+    stackSeen: roleSeen("stack"),
     stackAlive: stackAlive(),
     authority: control?.authority ?? "stack",
     alertActive,
@@ -75,7 +77,9 @@ export class StateMachine {
   }
 
   private next(i: StateInputs, dt: number): PageState {
-    if (!i.anyHello) return "connecting";
+    // A stack that has not connected yet is not lost (design section 6.3:
+    // Stack lost is a closed stack endpoint), so wait for its hello.
+    if (!i.anyHello || !i.stackSeen) return "connecting";
     if (this.stopped) return "stopped";
     // driver and remote get the same treatment as supervisor in schema 1.
     if (i.authority !== "stack") {

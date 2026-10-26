@@ -43,6 +43,12 @@ export function anyHello(): boolean {
   return store.size > 0;
 }
 
+// True once an endpoint carrying the role has sent hello, even if it closed since.
+export function roleSeen(role: string): boolean {
+  for (const s of store.values()) if (s.roles.includes(role)) return true;
+  return false;
+}
+
 // True when the named endpoint's hello listed the role.
 export function hasRole(name: string, role: string): boolean {
   return store.get(name)?.roles.includes(role) ?? false;

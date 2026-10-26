@@ -5,6 +5,7 @@ const DT = 1 / 60;
 
 const driving: StateInputs = {
   anyHello: true,
+  stackSeen: true,
   stackAlive: true,
   authority: "stack",
   alertActive: false,
@@ -22,6 +23,21 @@ describe("StateMachine", () => {
     const m = new StateMachine();
     expect(m.update({ ...driving, anyHello: false }, DT)).toBe("connecting");
     expect(m.update(driving, DT)).toBe("driving");
+  });
+
+  it("stays Connecting until a stack endpoint says hello", () => {
+    // The world endpoint is up first (CARLA before the board): not Stack lost.
+    const m = new StateMachine();
+    const worldOnly = { ...driving, stackSeen: false, stackAlive: false };
+    expect(m.update(worldOnly, DT)).toBe("connecting");
+    expect(m.update({ ...worldOnly, authority: "supervisor", speedMps: 0 }, DT)).toBe("connecting");
+    expect(m.update(driving, DT)).toBe("driving");
+  });
+
+  it("is Stack lost once a stack that connected has closed", () => {
+    const m = new StateMachine();
+    m.update(driving, DT);
+    expect(m.update({ ...driving, stackAlive: false }, DT)).toBe("stack_lost");
   });
 
   it("is Alert while a warn or critical alert is shown", () => {

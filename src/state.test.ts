@@ -10,6 +10,7 @@ import {
   roleLost,
   roleName,
   clearType,
+  roleSeen,
   hasRole,
 } from "./state";
 
@@ -136,6 +137,23 @@ describe("clearType", () => {
   });
 });
 
+describe("roleSeen and hasRole", () => {
+  it("roleSeen stays true after the endpoint closes", () => {
+    expect(roleSeen("pilot")).toBe(false);
+    setRoles("p1", ["pilot"]);
+    expect(roleSeen("pilot")).toBe(true);
+    closeEndpoint("p1");
+    expect(roleSeen("pilot")).toBe(true);
+  });
+
+  it("hasRole reads the roles of one named endpoint", () => {
+    setRoles("multi", ["vehicle", "map", "supervisor"]);
+    expect(hasRole("multi", "supervisor")).toBe(true);
+    expect(hasRole("multi", "stack")).toBe(false);
+    expect(hasRole("never-connected", "stack")).toBe(false);
+  });
+});
+
 describe("clearType on closed endpoints only", () => {
   it("keeps a live endpoint's control and drops a closed one's", () => {
     setRoles("live-sup", ["officer"]);
@@ -149,14 +167,5 @@ describe("clearType on closed endpoints only", () => {
     closeEndpoint("live-sup");
     clearType("order", true);
     expect(newestOfType("order")).toBeUndefined();
-  });
-});
-
-describe("hasRole", () => {
-  it("reads the roles of one named endpoint", () => {
-    setRoles("multi", ["vehicle", "map", "supervisor"]);
-    expect(hasRole("multi", "supervisor")).toBe(true);
-    expect(hasRole("multi", "stack")).toBe(false);
-    expect(hasRole("never-connected", "stack")).toBe(false);
   });
 });
