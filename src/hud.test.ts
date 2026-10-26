@@ -7,4 +7,9 @@ describe("viewportScale", () => {
     expect(viewportScale(720)).toBeCloseTo(2 / 3);
     expect(viewportScale(2160)).toBe(2);
   });
+
+  it("multiplies by ui_scale", () => {
+    expect(viewportScale(1080, 2)).toBe(2);
+    expect(viewportScale(720, 1.5)).toBeCloseTo(1);
+  });
 });

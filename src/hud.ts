@@ -18,19 +18,11 @@ const ACCEL_FULL_SCALE = 3; // m/s²
 const fmtInt = (n: number) => Math.round(n).toString();
 
 // The bottom-left panel is laid out for a 1080 px tall viewport and scales with
-// the viewport height (design §6.1).
+// the viewport height times ui_scale (design §6.1).
 const DESIGN_HEIGHT_PX = 1080;
 
-export function viewportScale(viewportHeight: number): number {
-  return viewportHeight / DESIGN_HEIGHT_PX;
-}
-
-// zoom, unlike transform: scale(), also scales the layout box, so the panel and
-// the status line under it keep their spacing at every size.
-export function scaleWithViewport(el: HTMLElement): void {
-  const fit = () => el.style.setProperty("zoom", String(viewportScale(window.innerHeight)));
-  fit();
-  window.addEventListener("resize", fit);
+export function viewportScale(viewportHeight: number, uiScale = 1): number {
+  return (viewportHeight / DESIGN_HEIGHT_PX) * uiScale;
 }
 
 export class Hud {

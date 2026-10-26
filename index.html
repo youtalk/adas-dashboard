@@ -76,6 +76,12 @@
       [hidden] {
         display: none !important;
       }
+      /* Overlay size (design section 6.1): --u is one px of the 1080p layout,
+         times ui_scale. main.ts sets --ui-scale from the configuration. */
+      :root {
+        --ui-scale: 2;
+        --u: calc(var(--ui-scale) * 100vh / 1080);
+      }
       html,
       body {
         margin: 0;
@@ -98,8 +104,8 @@
         z-index: 30;
       }
       /* Bottom-left column: HUD panel on top, connection status below it.
-         Sized for a 1080 px tall viewport; hud.ts sets zoom to scale it with
-         the viewport height (design §6.1). */
+         Sized for a 1080 px tall viewport; main.ts sets zoom to scale it with
+         the viewport height and ui_scale (design §6.1). */
       #bottom-left {
         position: fixed;
         left: 16px;
@@ -129,29 +135,35 @@
       /* ------------------------------------------------------------------ */
       /* Alert pill — top center (design §6.2)                               */
       /* ------------------------------------------------------------------ */
+      /* A long text wraps to more lines. The width keeps the pill clear of the
+         camera PiP (16 + 230 + 16 px on each side), but never under 30 percent
+         of the page. */
       #alert-pill {
         position: fixed;
-        top: 16px;
+        top: calc(16 * var(--u));
         left: 50%;
         transform: translateX(-50%);
-        padding: 7px 22px;
-        border-radius: 999px;
-        white-space: nowrap;
+        width: max-content;
+        max-width: max(30vw, calc(100vw - 2 * 262 * var(--u)));
+        box-sizing: border-box;
+        padding: calc(7 * var(--u)) calc(22 * var(--u));
+        border-radius: calc(22 * var(--u));
+        text-align: center;
+        line-height: 1.25;
         z-index: 20;
         pointer-events: none;
-        display: flex;
-        align-items: baseline;
-        gap: 6px;
       }
       #alert-pill-text {
-        font-size: 20px; /* design §6.5: at least 20 px at 1080p */
+        font-size: calc(20 * var(--u)); /* design §6.5: at least 20 px at 1080p */
         font-weight: 700;
         letter-spacing: 0.03em;
       }
       #alert-pill-code {
-        font-size: 11px;
+        margin-left: calc(6 * var(--u));
+        font-size: calc(11 * var(--u));
         opacity: 0.75;
         letter-spacing: 0.08em;
+        white-space: nowrap;
       }
       #alert-pill[data-severity="warn"] {
         background: var(--warn-bg);
@@ -171,14 +183,14 @@
       }
 
       /* ------------------------------------------------------------------ */
-      /* Camera PiP — top right (design §6.1): about 230 by 130 px at 1080p  */
+      /* Camera PiP — top right (design §6.1): 230 by 130 px at 1080p, x ui_scale */
       /* ------------------------------------------------------------------ */
       #pip {
         position: fixed;
-        top: 16px;
-        right: 16px;
-        width: calc(100vh * 230 / 1080);
-        height: calc(100vh * 130 / 1080);
+        top: calc(16 * var(--u));
+        right: calc(16 * var(--u));
+        width: calc(230 * var(--u));
+        height: calc(130 * var(--u));
         background: var(--pip-bg);
         border: 1px solid var(--pip-border);
         overflow: hidden;
@@ -195,17 +207,17 @@
       }
       #pip-lost {
         position: absolute;
-        top: 8px;
-        left: 10px;
-        font-size: 14px;
+        top: calc(8 * var(--u));
+        left: calc(10 * var(--u));
+        font-size: calc(14 * var(--u));
         color: var(--pip-fg);
       }
       #pip-min {
         position: fixed;
-        top: 16px;
-        right: 16px;
-        width: 40px;
-        height: 20px;
+        top: calc(16 * var(--u));
+        right: calc(16 * var(--u));
+        width: calc(40 * var(--u));
+        height: calc(20 * var(--u));
         border-radius: 999px;
         background: var(--pip-bg);
         border: 1px solid var(--pip-border);
@@ -214,6 +226,10 @@
         align-items: center;
         justify-content: center;
         z-index: 20;
+      }
+      #pip-min svg {
+        width: calc(16 * var(--u));
+        height: calc(12 * var(--u));
       }
 
       /* ------------------------------------------------------------------ */

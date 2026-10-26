@@ -51,6 +51,25 @@ describe("loadConfig", () => {
     expect(loadConfig(q, file)).toEqual(file);
   });
 
+  it("overrides ui_scale from the query", () => {
+    const c = loadConfig(new URLSearchParams("ui_scale=1.5"), file);
+    expect(c.ui_scale).toBe(1.5);
+  });
+
+  it("drops a ui_scale that is not a positive number", () => {
+    for (const v of ["big", "", "0", "-1", "Infinity"]) {
+      expect(loadConfig(new URLSearchParams(`ui_scale=${v}`), file)).toEqual(file);
+    }
+  });
+
+  it("drops a ui_scale in the file that is not a positive number", () => {
+    for (const v of ["big", 0, -1]) {
+      const bad = { ...file, ui_scale: v } as unknown as Config;
+      expect(loadConfig(new URLSearchParams(""), bad).ui_scale).toBeUndefined();
+    }
+    expect(loadConfig(new URLSearchParams(""), { ...file, ui_scale: 1.5 }).ui_scale).toBe(1.5);
+  });
+
   it("ignores unknown query keys", () => {
     const c = loadConfig(new URLSearchParams("foo=bar"), file);
     expect(c).toEqual(file);

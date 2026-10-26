@@ -6,7 +6,13 @@ export type Config = {
   units: "mph" | "km/h";
   theme: "dark" | "light";
   camera: { chase: CameraPreset; high: CameraPreset };
+  // Size of the status panel, the camera PiP and the pill (design section 6.1).
+  ui_scale?: number;
 };
+
+export const DEFAULT_UI_SCALE = 2;
+
+const isScale = (n: unknown): n is number => typeof n === "number" && Number.isFinite(n) && n > 0;
 
 const SCALAR_KEYS = ["camera_url", "units", "theme"] as const;
 
@@ -36,8 +42,13 @@ export function loadConfig(query: URLSearchParams, fileConfig: Config): Config {
       const n = Number(v);
       if (v.trim() === "" || !Number.isFinite(n)) continue;
       c.camera[preset[1] as keyof Config["camera"]][preset[2] as keyof CameraPreset] = n;
+    } else if (k === "ui_scale") {
+      const n = v.trim() === "" ? NaN : Number(v);
+      if (isScale(n)) c.ui_scale = n;
     }
   }
+  // config.json is edited by hand on the booth: a bad ui_scale falls back to the default.
+  if (c.ui_scale !== undefined && !isScale(c.ui_scale)) delete c.ui_scale;
   return c;
 }
 
