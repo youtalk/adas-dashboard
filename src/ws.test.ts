@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { connectEndpoint, connectionStatus, rejected } from "./ws";
+import { badUrls, connectEndpoint, connectionStatus, rejected } from "./ws";
 
 // Stands in for the browser WebSocket. close() fires onclose at once.
 class FakeSocket {
@@ -8,7 +8,9 @@ class FakeSocket {
   onmessage: ((ev: { data: string }) => void) | null = null;
   onclose: (() => void) | null = null;
   onerror: (() => void) | null = null;
-  constructor() {
+  constructor(url: string) {
+    // A host with "[" is one URL that Chrome's WebSocket constructor rejects at once.
+    if (url.includes("[")) throw new SyntaxError(`The URL '${url}' is invalid.`);
     FakeSocket.all.push(this);
   }
   close() {
@@ -51,13 +53,37 @@ describe("connectEndpoint", () => {
   });
 });
 
+describe("connectEndpoint with a bad URL", () => {
+  it("reports it, never retries it, and leaves the other endpoints alone", () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("WebSocket", FakeSocket);
+    FakeSocket.all = [];
+    const cb = { onHello: vi.fn(), onMessage: vi.fn(), onClose: vi.fn() };
+    // The loop in main.ts, with the bad URL first.
+    connectEndpoint("bogus", "ws://bad[url/x", cb);
+    connectEndpoint("stack", "ws://127.0.0.1:8090/stack", cb);
+    connectEndpoint("world", "ws://127.0.0.1:8091/world", cb);
+
+    expect([...badUrls]).toEqual(["bogus"]);
+    expect(FakeSocket.all).toHaveLength(2);
+    vi.advanceTimersByTime(60_000);
+    expect(FakeSocket.all).toHaveLength(2);
+  });
+});
+
 describe("connectionStatus", () => {
   it("is empty when all is well", () => {
-    expect(connectionStatus(new Map(), false, false)).toBe("");
+    expect(connectionStatus(new Map(), new Set(), false, false)).toBe("");
   });
 
   it("waits for the vehicle while Connecting", () => {
-    expect(connectionStatus(new Map(), true, true)).toBe("Waiting for vehicle...");
+    expect(connectionStatus(new Map(), new Set(), true, true)).toBe("Waiting for vehicle...");
+  });
+
+  it("puts a bad URL first", () => {
+    expect(connectionStatus(new Map([["world", 2]]), new Set(["stack"]), true, false)).toBe(
+      "stack: bad URL, world: unsupported schema 2, Waiting for vehicle...",
+    );
   });
 
   it("lists every rejected endpoint and keeps vehicle link lost", () => {
@@ -65,7 +91,7 @@ describe("connectionStatus", () => {
       ["stack", 2],
       ["world", 3],
     ]);
-    expect(connectionStatus(r, false, true)).toBe(
+    expect(connectionStatus(r, new Set(), false, true)).toBe(
       "stack: unsupported schema 2, world: unsupported schema 3, vehicle link lost",
     );
   });

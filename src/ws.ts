@@ -26,15 +26,19 @@ const BACKOFF_MAX_MS = 5000;
 // Endpoint name -> the unsupported hello.schema it sent (design section 5).
 // Cleared when the endpoint later sends a good hello.
 export const rejected = new Map<string, number>();
+// Endpoints whose URL the browser rejected. A retry cannot help, so they stay.
+export const badUrls = new Set<string>();
 
-// Bottom-left line (design section 6.3): every rejected endpoint, then
-// "Waiting for vehicle..." while Connecting or "vehicle link lost".
+// Bottom-left line (design section 6.3): every bad URL and rejected endpoint,
+// then "Waiting for vehicle..." while Connecting or "vehicle link lost".
 export function connectionStatus(
   rejected: Map<string, number>,
+  badUrls: Set<string>,
   connecting: boolean,
   vehicleLost: boolean,
 ): string {
-  const parts = [...rejected].map(([name, schema]) => `${name}: unsupported schema ${schema}`);
+  const parts = [...badUrls].map((name) => `${name}: bad URL`);
+  for (const [name, schema] of rejected) parts.push(`${name}: unsupported schema ${schema}`);
   if (connecting) parts.push("Waiting for vehicle...");
   else if (vehicleLost) parts.push("vehicle link lost");
   return parts.join(", ");
@@ -44,7 +48,14 @@ export function connectEndpoint(name: string, url: string, cb: Callbacks): void 
   let backoff = BACKOFF_MIN_MS;
 
   function open() {
-    const ws = new WebSocket(url);
+    let ws: WebSocket;
+    try {
+      ws = new WebSocket(url);
+    } catch {
+      // The constructor rejects an invalid URL at once, and a retry fails the same way.
+      badUrls.add(name);
+      return;
+    }
     let gotHello = false;
 
     ws.onopen = () => {
