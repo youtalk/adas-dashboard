@@ -1,6 +1,8 @@
 // Camera picture-in-picture (design section 6.1): an <iframe> of the raw camera
-// stream at the top right. Key c minimizes it to a small pill. The page draws
-// nothing on top of the camera image, except "camera lost" (design section 6.3).
+// stream at the top right. Key c or the close button minimizes it to a small
+// camera button, and a click on that button restores it. The page draws nothing
+// on top of the camera image, except the close button and "camera lost" (design
+// section 6.3).
 
 const PROBE_TIMEOUT_MS = 3000;
 const PROBE_RETRY_MS = 5000;
@@ -10,10 +12,16 @@ export class CameraPip {
   private frame = document.getElementById("pip-frame") as HTMLIFrameElement;
   private lostEl = document.getElementById("pip-lost") as HTMLElement;
   private minEl = document.getElementById("pip-min") as HTMLElement;
+  private closeEl = document.getElementById("pip-close") as HTMLElement;
   private url = "";
   private reachable = false;
   private stackLost = false;
   private minimized = false;
+
+  constructor() {
+    this.closeEl.addEventListener("click", () => this.toggleMinimized());
+    this.minEl.addEventListener("click", () => this.toggleMinimized());
+  }
 
   start(url: string): void {
     this.url = url;

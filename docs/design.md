@@ -309,7 +309,7 @@ This adapter is a future task in `adapters/autoware/`, not part of the CES 2027 
 
 ![Driving state](mockups/01-driving.png)
 
-The scene fills the page at any aspect ratio. The booth monitor is 1920 by 1080. The status panel (bottom left) is about 480 by 340 px at that size. The camera picture-in-picture (top right) is about 460 by 260 px. It is an `<iframe>` of the raw camera stream URL given in the configuration. The page draws nothing on top of the camera image. The `c` key minimizes it to an 80 px pill. These sizes are CSS px, so browser zoom (Ctrl + and Ctrl −) makes the status panel, the camera picture-in-picture and the pill larger or smaller on each screen. The browser keeps the zoom for the site. The scene does not change with the zoom.
+The scene fills the page at any aspect ratio. The booth monitor is 1920 by 1080. The status panel (bottom left) is about 480 by 340 px at that size. The camera picture-in-picture (top right) is about 460 by 260 px. It is an `<iframe>` of the raw camera stream URL given in the configuration. The page draws nothing on top of the camera image except the close button. The `c` key or the close button at its top right corner minimizes it to an 80 px camera button, and a click on that button restores it. These sizes are CSS px, so browser zoom (Ctrl + and Ctrl −) makes the status panel, the camera picture-in-picture and the pill larger or smaller on each screen. The browser keeps the zoom for the site. The scene does not change with the zoom.
 
 ### 6.2 Layers
 
@@ -354,7 +354,7 @@ Text in the scene uses a system sans-serif font. The pill text is 40 px at brows
 
 ## 7. Operator controls and configuration
 
-Keyboard only, no on-screen buttons:
+Keyboard, plus the two camera buttons of section 6.1:
 
 | Key | Action                                      |
 | --- | ------------------------------------------- |
