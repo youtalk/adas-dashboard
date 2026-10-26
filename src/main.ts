@@ -54,9 +54,6 @@ const frameEl = document.getElementById("frame")!;
 const rejected = new Map<string, number>();
 let configError: string | null = null;
 
-// Roles per endpoint — needed in onMessage to tell a stack status from others.
-const endpointRoles = new Map<string, string[]>();
-
 // Bottom-left line (design section 6.3): the schema rejection reason,
 // "Waiting for vehicle..." while Connecting, or "vehicle link lost".
 function statusText(state: PageState): string {
@@ -430,7 +427,6 @@ fetchConfig()
             trajectory.clear();
             alertPill.reset();
           }
-          endpointRoles.set(n, hello.roles);
           setRoles(n, hello.roles, hello.name);
         },
         onSchemaMismatch: (n, schema) => {
@@ -438,14 +434,7 @@ fetchConfig()
         },
         onMessage: (n, msg) => {
           recordMessage(n, msg);
-          // A stack status with mode "active" releases Stopped (design §6.3).
-          if (
-            msg.type === "status" &&
-            msg.mode === "active" &&
-            (endpointRoles.get(n) ?? []).includes("stack")
-          ) {
-            machine.stackActive();
-          }
+          machine.onMessage(n, msg);
         },
         onClose: (n) => {
           // The state machine sees the closed stack and ghosts its layers.

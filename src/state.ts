@@ -43,6 +43,11 @@ export function anyHello(): boolean {
   return store.size > 0;
 }
 
+// True when the named endpoint's hello listed the role.
+export function hasRole(name: string, role: string): boolean {
+  return store.get(name)?.roles.includes(role) ?? false;
+}
+
 // Find the latest message of a given type across all endpoints carrying a role.
 // Searches closed endpoints too so ego-mesh stays at its last known pose when
 // the vehicle endpoint drops (design section 4).

@@ -10,6 +10,7 @@ import {
   roleLost,
   roleName,
   clearType,
+  hasRole,
 } from "./state";
 
 // state.ts uses a module-level Map; reset between tests by re-registering endpoints.
@@ -148,5 +149,14 @@ describe("clearType on closed endpoints only", () => {
     closeEndpoint("live-sup");
     clearType("order", true);
     expect(newestOfType("order")).toBeUndefined();
+  });
+});
+
+describe("hasRole", () => {
+  it("reads the roles of one named endpoint", () => {
+    setRoles("multi", ["vehicle", "map", "supervisor"]);
+    expect(hasRole("multi", "supervisor")).toBe(true);
+    expect(hasRole("multi", "stack")).toBe(false);
+    expect(hasRole("never-connected", "stack")).toBe(false);
   });
 });

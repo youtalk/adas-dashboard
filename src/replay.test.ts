@@ -28,21 +28,15 @@ function schedule(endpoint: string, jsonl: string): Event[] {
   return events;
 }
 
-// The page's message handling from main.ts, without the DOM.
-function deliver(m: StateMachine, roles: Map<string, string[]>, e: Event) {
+// The page's message handling from main.ts, without the DOM. The state rules
+// themselves live in states.ts and are shared with main.ts.
+function deliver(m: StateMachine, e: Event) {
   if (e.kind === "hello") {
     const hello = e.msg as unknown as { roles: string[]; name: string };
-    roles.set(e.endpoint, hello.roles);
     setRoles(e.endpoint, hello.roles, hello.name);
   } else if (e.kind === "msg") {
     recordMessage(e.endpoint, e.msg!);
-    if (
-      e.msg!.type === "status" &&
-      e.msg!.mode === "active" &&
-      roles.get(e.endpoint)?.includes("stack")
-    ) {
-      m.stackActive();
-    }
+    m.onMessage(e.endpoint, e.msg!);
   } else {
     closeEndpoint(e.endpoint);
   }
@@ -59,7 +53,6 @@ function step(m: StateMachine): PageState {
 describe("replay of the kill route", () => {
   it("plays through Connecting, Driving, Alert, Stack lost, Takeover and Stopped", () => {
     const m = new StateMachine();
-    const roles = new Map<string, string[]>();
     const events = [...schedule("stack", stackJsonl), ...schedule("world", worldJsonl)].sort(
       (a, b) => a.at - b.at,
     );
@@ -71,7 +64,7 @@ describe("replay of the kill route", () => {
     let next = 0;
     const end = events[events.length - 1].at + 2;
     for (let t = 0; t <= end; t += DT) {
-      while (next < events.length && events[next].at <= t) deliver(m, roles, events[next++]);
+      while (next < events.length && events[next].at <= t) deliver(m, events[next++]);
       const s = step(m);
       if (!firstAt.has(s)) firstAt.set(s, t);
     }
@@ -95,7 +88,7 @@ describe("replay of the kill route", () => {
 
     // The stack comes back (replay restarted): its first frame says active.
     const restart = schedule("stack", stackJsonl).filter((e) => e.at === 0);
-    for (const e of restart) deliver(m, roles, e);
+    for (const e of restart) deliver(m, e);
     expect(step(m)).toBe("driving");
     expect(m.releaseFade).toBeGreaterThan(0);
     for (let t = 0; t < 1.1; t += DT) step(m);

@@ -1,6 +1,6 @@
 // Page states (design section 6.3). Two independent signals decide the state:
 // whether the stack endpoint is alive, and who has control.authority.
-import { anyHello, latestByRole, newestOfType, stackAlive } from "./state";
+import { anyHello, hasRole, latestByRole, newestOfType, stackAlive } from "./state";
 
 export type PageState = "connecting" | "driving" | "alert" | "stack_lost" | "takeover" | "stopped";
 
@@ -47,7 +47,14 @@ export class StateMachine {
     return this.releaseS / RELEASE_FADE_S;
   }
 
-  // A stack status with mode "active" arrived. It releases Stopped.
+  // Feed every received message. A stack status with mode "active" releases
+  // Stopped. Shared by main.ts and the replay test.
+  onMessage(endpoint: string, msg: Record<string, unknown>): void {
+    if (msg.type === "status" && msg.mode === "active" && hasRole(endpoint, "stack")) {
+      this.stackActive();
+    }
+  }
+
   stackActive(): void {
     if (!this.stopped) return;
     this.stopped = false;
