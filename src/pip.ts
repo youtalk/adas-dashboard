@@ -30,8 +30,13 @@ export class CameraPip {
   setStackLost(lost: boolean): void {
     if (lost === this.stackLost) return;
     this.stackLost = lost;
-    // The camera stream restarts with the stack, so load it again on recovery.
-    if (!lost && this.reachable) this.frame.src = this.url;
+    // The camera stream restarts with the stack and its server may listen a
+    // little later, so go back through the probe instead of loading at once.
+    // A probe that is still retrying already covers it.
+    if (!lost && this.reachable) {
+      this.reachable = false;
+      this.probe();
+    }
     this.render();
   }
 
