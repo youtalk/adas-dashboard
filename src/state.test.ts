@@ -134,3 +134,19 @@ describe("clearType", () => {
     expect(newestOfType("verdict")).toBeUndefined();
   });
 });
+
+describe("clearType on closed endpoints only", () => {
+  it("keeps a live endpoint's control and drops a closed one's", () => {
+    setRoles("live-sup", ["officer"]);
+    setRoles("dead-sup", ["officer"]);
+    recordMessage("live-sup", { type: "order", authority: "supervisor" });
+    recordMessage("dead-sup", { type: "order", authority: "supervisor" });
+    closeEndpoint("dead-sup");
+    clearType("order", true);
+    expect(allByRole("officer", "order")).toHaveLength(1); // the live one
+    expect(newestOfType("order")?.authority).toBe("supervisor");
+    closeEndpoint("live-sup");
+    clearType("order", true);
+    expect(newestOfType("order")).toBeUndefined();
+  });
+});

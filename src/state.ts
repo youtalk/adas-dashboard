@@ -104,9 +104,11 @@ export function roleName(role: string): string | undefined {
   return undefined;
 }
 
-// Drop the latest message of a type on every endpoint (key r, design section 7).
-export function clearType(type: string): void {
+// Drop the latest message of a type on every endpoint (key r, design section 7),
+// or only on closed endpoints, whose last message nothing will replace.
+export function clearType(type: string, closedOnly = false): void {
   for (const s of store.values()) {
+    if (closedOnly && !s.closed) continue;
     delete s.latest[type];
     delete s.seq[type];
   }

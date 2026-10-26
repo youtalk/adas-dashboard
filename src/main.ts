@@ -174,12 +174,13 @@ bindKeys((action) => {
       cameraController?.setPreset(action);
       break;
     case "reset":
-      // Clear Stopped and the alerts. Control is cleared too, so a latched
-      // authority does not put the page straight back into Stopped; live
-      // endpoints re-establish it with their next control message.
+      // Clear Stopped and the alerts (design section 7). A closed endpoint's
+      // last control is cleared too, for example a supervisor at the end of a
+      // replay, or it would put the page straight back into Stopped. A live
+      // endpoint keeps its authority, which it may send only on change.
       machine.reset();
       clearType("alerts");
-      clearType("control");
+      clearType("control", true);
       alertPill.reset();
       break;
   }
