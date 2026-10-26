@@ -17,6 +17,12 @@ const ACCEL_FULL_SCALE = 3; // m/s²
 
 const fmtInt = (n: number) => Math.round(n).toString();
 
+// Scene label above the lead vehicle, e.g. "32 m · 2.7 s" (mockup 01). Same
+// numbers as the status panel; gapS is null below 0.5 m/s.
+export function leadLabelText(distM: number, gapS: number | null): string {
+  return gapS !== null ? `${fmtInt(distM)} m · ${gapS.toFixed(1)} s` : `${fmtInt(distM)} m`;
+}
+
 // The bottom-left panel is laid out for a 1080 px tall viewport and scales with
 // the viewport height (design §6.1).
 const DESIGN_HEIGHT_PX = 1080;

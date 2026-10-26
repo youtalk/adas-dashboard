@@ -39,6 +39,7 @@
         --pip-bg: #222222;
         --pip-border: #666666;
         --pip-fg: #888888;
+        --label-shadow: #000000;
       }
       :root[data-theme="light"] {
         --bg-top: #cfd8e3;
@@ -72,6 +73,7 @@
         --pip-bg: #e2e8f0;
         --pip-border: #94a3b8;
         --pip-fg: #475569;
+        --label-shadow: #ffffff;
       }
       [hidden] {
         display: none !important;
@@ -96,6 +98,21 @@
         border: calc(100vh * 12 / 1080) solid var(--takeover);
         pointer-events: none;
         z-index: 30;
+      }
+      /* Lead vehicle distance label (mockup 01). Plain CSS px, so browser zoom
+         scales it; main.ts moves it above the lead vehicle every frame. */
+      #lead-label {
+        position: fixed;
+        left: 0;
+        top: 0;
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--lead);
+        text-shadow:
+          0 0 4px var(--label-shadow),
+          0 1px 2px var(--label-shadow);
+        white-space: nowrap;
+        pointer-events: none;
       }
       /* Bottom-left column: HUD panel on top, connection status below it.
          Sized for a 1080 px tall viewport; hud.ts sets zoom to scale it with
@@ -402,6 +419,7 @@
   </head>
   <body>
     <div id="scene"></div>
+    <div id="lead-label" hidden></div>
     <div id="frame" hidden></div>
 
     <!-- Camera picture-in-picture — top right, key c (design §6.1) -->

@@ -17,7 +17,7 @@ import { createCameraController, type CameraController } from "./camera";
 import { mapToScene, yawToSceneRotation } from "./frames";
 import { ObjectManager, type RawObject } from "./objects";
 import { replaceEgoMesh } from "./ego";
-import { Hud, scaleWithViewport, type HudData } from "./hud";
+import { Hud, leadLabelText, scaleWithViewport, type HudData } from "./hud";
 import { AlertPill, collectAlerts, type Banner } from "./alert";
 import { LaneManager, type RawLane } from "./lanes";
 import { TrajectoryRibbon } from "./trajectory";
@@ -51,6 +51,7 @@ type StatusMsg = {
 const status = document.getElementById("status")!;
 const credit = document.getElementById("credit")!;
 const frameEl = document.getElementById("frame")!;
+const leadLabel = document.getElementById("lead-label")!;
 const rejected = new Map<string, number>();
 let configError: string | null = null;
 
@@ -404,6 +405,20 @@ function animate() {
   trajectory.tick(dt);
   alertPill.tick(dt);
   renderer.render(scene, camera);
+
+  // Lead distance label: an HTML element at a fixed screen size, placed after
+  // the render so the camera matrices are this frame's. It hides with the
+  // lead, which includes the ghost states. z > 1: behind the camera.
+  const labelPoint = objManager.leadLabelPoint()?.project(camera);
+  if (leadDistM !== null && labelPoint && labelPoint.z < 1) {
+    leadLabel.textContent = leadLabelText(leadDistM, leadGapS);
+    const x = ((labelPoint.x + 1) / 2) * window.innerWidth;
+    const y = ((1 - labelPoint.y) / 2) * window.innerHeight;
+    leadLabel.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`;
+    leadLabel.hidden = false;
+  } else {
+    leadLabel.hidden = true;
+  }
 }
 animate();
 
