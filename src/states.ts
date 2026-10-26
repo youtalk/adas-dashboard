@@ -16,7 +16,7 @@ export type StateInputs = {
 // Takeover and below this speed for STOP_HOLD_S means Stopped.
 const STOP_SPEED_MPS = 0.1;
 const STOP_HOLD_S = 1;
-// Stopped fades back to Driving over this time once the stack reports active.
+// Stopped fades back to Driving over this time once it is released.
 export const RELEASE_FADE_S = 1;
 
 // States in which the stack layers are drawn as ghosts.
@@ -41,6 +41,7 @@ export function readInputs(alertActive: boolean): StateInputs {
 export class StateMachine {
   state: PageState = "connecting";
   private stopped = false;
+  private activeSeen = false; // a stack "active" status arrived while Stopped
   private slowS = 0; // time spent below STOP_SPEED_MPS during Takeover
   private releaseS = 0; // time left in the fade back from Stopped
 
@@ -49,8 +50,8 @@ export class StateMachine {
     return this.releaseS / RELEASE_FADE_S;
   }
 
-  // Feed every received message. A stack status with mode "active" releases
-  // Stopped. Shared by main.ts and the replay test.
+  // Feed every received message. A stack status with mode "active" is one of
+  // the two signals that release Stopped. Shared by main.ts and the replay test.
   onMessage(endpoint: string, msg: Record<string, unknown>): void {
     if (msg.type === "status" && msg.mode === "active" && hasRole(endpoint, "stack")) {
       this.stackActive();
@@ -58,14 +59,13 @@ export class StateMachine {
   }
 
   stackActive(): void {
-    if (!this.stopped) return;
-    this.stopped = false;
-    this.releaseS = RELEASE_FADE_S;
+    if (this.stopped) this.activeSeen = true;
   }
 
   // Key r: clear Stopped at once, with no fade.
   reset(): void {
     this.stopped = false;
+    this.activeSeen = false;
     this.slowS = 0;
     this.releaseS = 0;
   }
@@ -80,12 +80,21 @@ export class StateMachine {
     // A stack that has not connected yet is not lost (design section 6.3:
     // Stack lost is a closed stack endpoint), so wait for its hello.
     if (!i.anyHello || !i.stackSeen) return "connecting";
-    if (this.stopped) return "stopped";
+    // Stopped holds until the stack reports active and has control back. The two
+    // can arrive in either order, for example the stack first and the supervisor
+    // handing control back after it.
+    if (this.stopped) {
+      if (!this.activeSeen || i.authority !== "stack") return "stopped";
+      this.stopped = false;
+      this.activeSeen = false;
+      this.releaseS = RELEASE_FADE_S;
+    }
     // driver and remote get the same treatment as supervisor in schema 1.
     if (i.authority !== "stack") {
       this.slowS = i.speedMps !== null && i.speedMps < STOP_SPEED_MPS ? this.slowS + dt : 0;
       if (this.slowS >= STOP_HOLD_S) {
         this.stopped = true;
+        this.activeSeen = false;
         this.releaseS = 0;
         return "stopped";
       }

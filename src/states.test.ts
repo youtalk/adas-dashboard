@@ -104,6 +104,43 @@ describe("StateMachine", () => {
     expect(m.releaseFade).toBe(0);
   });
 
+  it("releases when the stack reports active before the supervisor hands control back", () => {
+    const m = new StateMachine();
+    const held = { ...driving, authority: "supervisor", speedMps: 0 };
+    run(m, held, 1.1);
+    m.stackActive(); // the restarted stack comes back first
+    expect(run(m, held, 2)).toBe("stopped"); // the supervisor still has control
+    expect(m.releaseFade).toBe(0);
+    // Control comes back with no further stack status (status only on change).
+    expect(m.update(driving, DT)).toBe("driving");
+    expect(m.releaseFade).toBeGreaterThan(0.9);
+  });
+
+  it("releases when control comes back before the stack reports active", () => {
+    const m = new StateMachine();
+    run(m, { ...driving, authority: "supervisor", speedMps: 0 }, 1.1);
+    expect(run(m, { ...driving, speedMps: 0 }, 2)).toBe("stopped");
+    m.stackActive();
+    expect(m.update({ ...driving, speedMps: 0 }, DT)).toBe("driving");
+  });
+
+  it("does not count an active status from before the stop", () => {
+    const m = new StateMachine();
+    m.stackActive(); // while driving
+    run(m, { ...driving, authority: "supervisor", speedMps: 0 }, 1.1);
+    expect(run(m, { ...driving, speedMps: 0 }, 1)).toBe("stopped");
+  });
+
+  it("reset forgets an active status seen while Stopped", () => {
+    const m = new StateMachine();
+    const held = { ...driving, authority: "supervisor", speedMps: 0 };
+    run(m, held, 1.1);
+    m.stackActive();
+    m.reset();
+    run(m, held, 1.1); // stopped again
+    expect(m.update({ ...driving, speedMps: 0 }, DT)).toBe("stopped");
+  });
+
   it("stackActive outside Stopped does nothing", () => {
     const m = new StateMachine();
     m.stackActive();
