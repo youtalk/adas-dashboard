@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, beforeAll } from "vitest";
 import * as THREE from "three";
 import { egoToScene } from "./frames";
-import { ObjectManager, type RawObject } from "./objects";
+import { ObjectManager, poseAt, retarget, type Motion, type RawObject } from "./objects";
 
 // Minimal canvas mock for tests that exercise the lead-vehicle label sprite.
 // The test environment has no DOM, so `document.createElement("canvas")` would throw.
@@ -70,6 +70,58 @@ describe("egoToScene", () => {
   it("adds egoYaw and object yaw for scene rotation", () => {
     const p = egoToScene(0, 0, Math.PI / 4, 0, 0, Math.PI / 4);
     expect(p.ry).toBeCloseTo(Math.PI / 2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Object motion between messages — pure functions
+// ---------------------------------------------------------------------------
+
+describe("object motion", () => {
+  // Message k arrives at arriveMs(k), and main.ts picks it up on the next
+  // 60 Hz frame. Returns the drawn x at every frame for 2 s.
+  function drive(xs: number[], arriveMs = (k: number) => k * 100): number[] {
+    let m: Motion | null = null;
+    const drawn: number[] = [];
+    let k = 0;
+    for (let i = 0; i < 120; i++) {
+      const t = (i * 1000) / 60;
+      if (k < xs.length && t >= arriveMs(k)) {
+        const before = m ? poseAt(m, t).x : xs[k];
+        m = retarget(m, { x: xs[k], y: 0, yaw: 0 }, t);
+        expect(poseAt(m, t).x).toBeCloseTo(before, 9); // no jump at message arrival
+        k++;
+      }
+      drawn.push(poseAt(m!, t).x);
+    }
+    return drawn;
+  }
+
+  it("moves a constant-speed object smoothly", () => {
+    const drawn = drive([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]); // 10 m/s
+    for (let i = 1; i < drawn.length; i++) {
+      const step = drawn[i] - drawn[i - 1];
+      expect(step).toBeGreaterThanOrEqual(0);
+      expect(step).toBeLessThan(0.17); // 10 m/s is 1/6 m per frame
+    }
+    expect(drawn[drawn.length - 1]).toBeCloseTo(9);
+  });
+
+  it("never passes the last reported position of an object that stops", () => {
+    // Every other message is 20 ms late, so some moves start mid-way.
+    const drawn = drive([0, 1, 2, 3, 4, 4, 4, 4], (k) => k * 100 + (k % 2) * 20);
+    expect(Math.max(...drawn)).toBeLessThanOrEqual(4);
+    expect(drawn[drawn.length - 1]).toBe(4);
+  });
+
+  it("turns the short way across ±π", () => {
+    const m = retarget(retarget(null, { x: 0, y: 0, yaw: 3.1 }, 0), { x: 0, y: 0, yaw: -3.1 }, 100);
+    expect(Math.abs(poseAt(m, 150).yaw)).toBeCloseTo(Math.PI, 2);
+  });
+
+  it("does not stretch the move over a long message gap", () => {
+    const m = retarget(retarget(null, { x: 0, y: 0, yaw: 0 }, 0), { x: 5, y: 0, yaw: 0 }, 5000);
+    expect(poseAt(m, 5300).x).toBe(5);
   });
 });
 
