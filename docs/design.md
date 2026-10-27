@@ -91,7 +91,7 @@ The schema is versioned. JSON Schema files live in `schema/v1/`. The page reject
 }
 ```
 
-`ego` (role `vehicle`, 10 to 50 Hz):
+`ego` (role `vehicle`, 10 to 50 Hz). `steer_rad` is the road wheel angle, left positive, as CARLA and Autoware report it.
 
 ```json
 {
@@ -345,7 +345,7 @@ If the `vehicle` endpoint closes, the ego vehicle stops at its last pose. A smal
 
 ### 6.4 Status panel
 
-Bottom left, in this order. Speed as a large number with the unit. The speed limit in a small rounded box. The lead vehicle distance and time gap (`distance_m / speed_mps`, omitted below 0.5 m/s). A steering wheel icon that rotates with `steer_rad`. A horizontal pedal bar: green right of center for acceleration, red left of center for braking, amber during Takeover. One small line `<name> · <latency_ms> ms · <device>`. `units` in the configuration selects `mph` or `km/h`.
+Bottom left, in this order. Speed as a large number with the unit. The speed limit in a small rounded box. The lead vehicle distance and time gap (`distance_m / speed_mps`, omitted below 0.5 m/s). A steering wheel icon that rotates with `steer_rad` times 15, a typical steering ratio, so that it turns like a real steering wheel. A horizontal pedal bar: green right of center for acceleration, red left of center for braking, amber during Takeover. One small line `<name> · <latency_ms> ms · <device>`. `units` in the configuration selects `mph` or `km/h`.
 
 ### 6.5 Style
 
