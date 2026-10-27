@@ -348,7 +348,7 @@ Bottom left, in this order. Speed as a large number with the unit. The speed lim
 
 ### 6.5 Style
 
-Dark matte by default. Background gradient `#0b0f14` to `#1c2530`. Road `#161d26`. Map lanes `#4b5661`. Perceived lanes `#22d3ee`. Trajectory `#22c55e`. Traffic `#3b82f6`. Lead vehicle `#ef4444`. Ego `#d9d9d9`. Alert `#b91c1c`. Takeover `#fb923c`. All colors are CSS custom properties so the light theme (`t` key) only redefines tokens. Meshes use a flat material with one directional key light and a soft contact shadow. No bloom, no post-processing.
+Dark matte by default. Background gradient `#0b0f14` to `#1c2530`. Road `#161d26`. Map lanes `#4b5661`. Perceived lanes `#22d3ee`. Trajectory `#22c55e`, drawn at 40 percent opacity and ghosted to 8 percent in Stack lost. Traffic `#3b82f6`. Lead vehicle `#ef4444`. Ego `#d9d9d9`. Alert `#b91c1c`. Takeover `#fb923c`. All colors are CSS custom properties so the light theme (`t` key) only redefines tokens. Meshes use a flat material with one directional key light and a soft contact shadow. No bloom, no post-processing.
 
 Text in the scene uses a system sans-serif font. The pill text is at least 20 px at 1080p. The speed number is at least 40 px.
 
@@ -381,6 +381,8 @@ Keyboard only, no on-screen buttons:
 ```
 
 URL query parameters override `config.json` key by key.
+
+Both camera presets use a 45° vertical field of view.
 
 ## 8. Frontend stack and repository layout
 
