@@ -215,6 +215,35 @@
         align-items: center;
         justify-content: center;
         z-index: 20;
+        padding: 0;
+        cursor: pointer;
+      }
+      /* Close button: hides the PiP like key c (design section 6.1). */
+      #pip-close {
+        position: absolute;
+        top: calc(6 * var(--u));
+        right: calc(6 * var(--u));
+        width: calc(24 * var(--u));
+        height: calc(24 * var(--u));
+        padding: 0;
+        border: 1px solid var(--pip-border);
+        border-radius: 50%;
+        background: var(--pip-bg);
+        color: var(--pip-fg);
+        opacity: 0.8;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #pip-close:hover,
+      #pip-min:hover {
+        opacity: 1;
+        color: var(--fg-strong);
+      }
+      #pip-close svg {
+        width: calc(12 * var(--u));
+        height: calc(12 * var(--u));
       }
       #pip-min svg {
         width: calc(16 * var(--u));
@@ -413,13 +442,23 @@
     <div id="pip">
       <iframe id="pip-frame" title="camera" allow="autoplay" hidden></iframe>
       <div id="pip-lost">camera lost</div>
+      <button id="pip-close" type="button" aria-label="Hide camera">
+        <svg viewBox="0 0 12 12" aria-hidden="true">
+          <path
+            d="M2.5 2.5 L9.5 9.5 M9.5 2.5 L2.5 9.5"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+          />
+        </svg>
+      </button>
     </div>
-    <div id="pip-min" hidden>
-      <svg viewBox="0 0 16 12" width="16" height="12" aria-label="camera">
+    <button id="pip-min" type="button" aria-label="Show camera" hidden>
+      <svg viewBox="0 0 16 12" width="16" height="12" aria-hidden="true">
         <rect x="0.5" y="2.5" width="10" height="8" rx="1.5" fill="none" stroke="currentColor" />
         <path d="M11 5.5 L15.5 3 L15.5 10 L11 7.5 Z" fill="currentColor" />
       </svg>
-    </div>
+    </button>
 
     <!-- Alert pill — top center -->
     <div id="alert-pill" hidden>
