@@ -7,6 +7,9 @@ import { palette } from "./style";
 const EGO_WIDTH = 1.8;
 const EGO_HEIGHT = 1.5;
 const EGO_LENGTH = 4.5;
+// The ego frame origin and pose_map are the rear axle (design section 5.1).
+// The body center sits about half a 2.8 m wheelbase ahead of it.
+export const EGO_REAR_AXLE_TO_CENTER = 1.4;
 
 // Replaces the placeholder box in egoGroup with a normalised car.glb.
 // Falls back silently to the existing placeholder if the GLB fails.
@@ -27,6 +30,7 @@ export async function replaceEgoMesh(egoGroup: THREE.Group): Promise<void> {
 
     const outer = new THREE.Group();
     outer.scale.set(EGO_WIDTH, EGO_HEIGHT, EGO_LENGTH);
+    outer.position.z = EGO_REAR_AXLE_TO_CENTER;
     template.position.y = 0.5;
     outer.add(template);
 

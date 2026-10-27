@@ -213,6 +213,26 @@ describe("AlertPill.setBanner", () => {
     expect(codeEl.textContent).toBe("SI_STOP");
   });
 
+  it("pulses the Stack lost banner like a critical alert, with no alert held", () => {
+    const { pill, el } = makePill();
+    const lost = { text: "VisionPilot lost", kind: "lost" } as const;
+    pill.setBanner(lost);
+    pill.tick(0.75); // three quarters of a period → sin=-1 → opacity 0.3
+    expect(parseFloat(el.style.opacity)).toBeCloseTo(0.3, 5);
+    pill.setBanner(lost); // main.ts sets the banner on every frame
+    pill.tick(0.25); // one full period → sin=0 → opacity 0.65
+    expect(parseFloat(el.style.opacity)).toBeCloseTo(0.65, 5);
+  });
+
+  it("starts the Stack lost pulse from its first phase, like a new critical alert", () => {
+    const { pill, el } = makePill();
+    pill.setAlerts([crit]);
+    pill.tick(0.75); // the critical pulse is at its dimmest
+    pill.setBanner({ text: "VisionPilot lost", kind: "lost" });
+    pill.tick(0);
+    expect(parseFloat(el.style.opacity)).toBeCloseTo(0.65, 5);
+  });
+
   it("keeps the hold timing of the alerts under a banner", () => {
     const { pill, el } = makePill();
     pill.setAlerts([warn]);
