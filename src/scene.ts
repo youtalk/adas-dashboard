@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { EGO_REAR_AXLE_TO_CENTER } from "./ego";
 import { palette } from "./style";
 
 export function createScene(container: HTMLElement) {
@@ -6,11 +7,15 @@ export function createScene(container: HTMLElement) {
   // (--bg-top to --bg-bottom, design section 6.5) shows behind the road.
   const scene = new THREE.Scene();
 
-  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+  // 45° vertical field of view (design section 7).
+  const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
   camera.position.set(0, 8, -14);
   camera.lookAt(0, 0, 5);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  // Draw at the screen's own pixels: browser zoom raises devicePixelRatio, and
+  // without this the scene would be drawn smaller and stretched.
+  renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = true;
   container.appendChild(renderer.domElement);
@@ -46,6 +51,7 @@ export function createScene(container: HTMLElement) {
     new THREE.BoxGeometry(1.8, 1.5, 4.5),
     new THREE.MeshStandardMaterial({ color: palette.ego }),
   );
+  egoBox.position.z = EGO_REAR_AXLE_TO_CENTER;
   egoBox.castShadow = true;
   egoGroup.add(egoBox);
   egoGroup.position.y = 0.75;
@@ -54,6 +60,7 @@ export function createScene(container: HTMLElement) {
   window.addEventListener("resize", () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
+    renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 

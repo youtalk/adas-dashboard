@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { fetchConfig } from "./config";
 import { connectEndpoint } from "./ws";
+import { isWellFormed } from "./messages";
 import {
   setRoles,
   recordMessage,
@@ -17,7 +18,7 @@ import { createCameraController, type CameraController } from "./camera";
 import { mapToScene, yawToSceneRotation } from "./frames";
 import { ObjectManager, type RawObject } from "./objects";
 import { replaceEgoMesh } from "./ego";
-import { Hud, scaleWithViewport, type HudData } from "./hud";
+import { Hud, type HudData } from "./hud";
 import { AlertPill, collectAlerts, type Banner } from "./alert";
 import { LaneManager, type RawLane } from "./lanes";
 import { TrajectoryRibbon } from "./trajectory";
@@ -90,7 +91,6 @@ const objManager = new ObjectManager(scene);
 const laneManager = new LaneManager(scene);
 const trajectory = new TrajectoryRibbon(scene);
 const hud = new Hud();
-scaleWithViewport(document.getElementById("bottom-left")!);
 const alertPill = new AlertPill();
 const machine = new StateMachine();
 const pip = new CameraPip();
@@ -433,6 +433,7 @@ fetchConfig()
           rejected.set(n, schema);
         },
         onMessage: (n, msg) => {
+          if (!isWellFormed(msg)) return; // one bad message must not stop the frame loop
           recordMessage(n, msg);
           machine.onMessage(n, msg);
         },
