@@ -25,13 +25,20 @@ def test_to_map_flips_y_and_yaw():
 
 def test_ego_projects_on_forward_and_flips_steer():
     m = world.ego(
-        5.0, 10.0, 20.0, 0.0, (3.0, 4.0, 0.0), (-1.0, 0.0, 0.0), (1.0, 0.0, 0.0), 0.5, 70.0
+        5.0, 10.0, 20.0, 0.0, (3.0, 4.0, 0.0), (-1.0, 0.0, 0.0), (1.0, 0.0, 0.0), 0.5, 70.0, 0.0
     )
     schema.validate(m)
     assert m["speed_mps"] == 3.0
     assert m["accel_mps2"] == -1.0
     assert m["steer_rad"] == round(-0.5 * math.radians(70.0), 4)
     assert m["pose_map"] == {"x": 10.0, "y": -20.0, "yaw": 0.0}
+
+
+def test_ego_puts_pose_map_on_the_rear_axle():
+    # CARLA yaw 90 degrees faces CARLA +y, which is map -y. The rear axle is 1.4 m behind that.
+    zero = (0.0, 0.0, 0.0)
+    m = world.ego(5.0, 10.0, 20.0, 90.0, zero, zero, (0.0, 1.0, 0.0), 0.0, 70.0, 1.4)
+    assert m["pose_map"] == {"x": 10.0, "y": -18.6, "yaw": round(-math.pi / 2, 4)}
 
 
 def test_boundaries_send_each_line_once():

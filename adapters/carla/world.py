@@ -15,6 +15,8 @@ SPLIT_GAP_M = 3.0  # waypoints come every 2 m. A larger step is another piece of
 # Town04 junctions: through lanes bend up to 54 degrees, turns at a crossing 68 or more.
 TURN_RAD = math.radians(60.0)
 HEADING_RAD = math.radians(15.0)  # a lane end this close in heading continues the junction lane
+# vehicle.lincoln.mkz, the bench hero: its rear wheel bones are 1.397 m behind the actor origin.
+REAR_AXLE_M = 1.4
 SOLID = {"Solid", "SolidSolid", "SolidBroken", "BrokenSolid", "Curb"}
 BROKEN = {"Broken", "BrokenBroken", "BottsDots"}
 
@@ -57,9 +59,14 @@ def ego(
     forward: tuple[float, float, float],
     steer: float,
     max_steer_deg: float,
+    rear_axle_m: float,
 ) -> dict:
-    """Vectors are CARLA (x, y, z). A dot product gives the same value in both frames."""
-    mx, my, myaw = to_map(x, y, yaw_deg)
+    """Vectors are CARLA (x, y, z). A dot product gives the same value in both frames.
+
+    x, y is the actor origin. pose_map is the rear axle (design section 5.1), rear_axle_m behind it.
+    """
+    yaw = math.radians(yaw_deg)
+    mx, my, myaw = to_map(x - rear_axle_m * math.cos(yaw), y - rear_axle_m * math.sin(yaw), yaw_deg)
     return {
         **_envelope("ego", t_ms),
         "speed_mps": round(math.sumprod(velocity, forward), 2),

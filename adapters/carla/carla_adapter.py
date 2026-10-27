@@ -106,6 +106,7 @@ async def run(args: argparse.Namespace) -> None:
             vec(t.get_forward_vector()),
             hero.get_control().steer,
             max_steer,
+            args.rear_axle_m,
         )
         endpoint.broadcast(last)
         x, y = last["pose_map"]["x"], last["pose_map"]["y"]
@@ -121,6 +122,12 @@ if __name__ == "__main__":
     ap.add_argument("--carla", default="127.0.0.1:2000", help="CARLA server HOST:PORT")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8091)
+    ap.add_argument(
+        "--rear-axle-m",
+        type=float,
+        default=world.REAR_AXLE_M,
+        help="meters from the hero's rear axle forward to its actor origin",
+    )
     try:
         asyncio.run(run(ap.parse_args()))
     except RuntimeError as e:  # CARLA stopped. The closed port shows "vehicle link lost".
