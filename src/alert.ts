@@ -81,6 +81,7 @@ export class AlertPill {
   // The alert list keeps its hold timing underneath.
   setBanner(banner: Banner | null): void {
     const had = this.banner !== null;
+    if (banner?.kind === "lost" && this.banner?.kind !== "lost") this.pulseTime = 0;
     this.banner = banner;
     if (banner) {
       this.textEl.textContent = banner.text;
@@ -132,6 +133,9 @@ export class AlertPill {
   }
 
   tick(dt: number): void {
+    // Stack lost pulses like a critical alert; the other banners are steady.
+    if (this.banner?.kind === "lost") this.pulse(dt);
+
     if (this.pillState === "idle") return;
 
     if (this.pillState === "holding") {
@@ -145,16 +149,20 @@ export class AlertPill {
       return;
     }
 
-    // A banner is steady; the pulse belongs to the Alert state only.
+    // A banner hides the alert, so its pulse does not apply.
     if (this.banner) return;
 
-    // Active with critical severity: 1 Hz sine pulse (opacity 0.3 → 1.0).
     if (this.severity === "critical") {
-      this.pulseTime += dt;
-      const t = 0.5 + 0.5 * Math.sin(2 * Math.PI * this.pulseTime);
-      this.el.style.opacity = String(0.3 + 0.7 * t);
+      this.pulse(dt);
     } else {
       this.el.style.opacity = "1";
     }
+  }
+
+  // 1 Hz sine pulse (opacity 0.3 → 1.0).
+  private pulse(dt: number): void {
+    this.pulseTime += dt;
+    const t = 0.5 + 0.5 * Math.sin(2 * Math.PI * this.pulseTime);
+    this.el.style.opacity = String(0.3 + 0.7 * t);
   }
 }

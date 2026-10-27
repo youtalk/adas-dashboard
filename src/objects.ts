@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { egoToScene } from "./frames";
-import { cssHex, LINE_WIDTH_M, palette, STACK_LOST_FADE_S, STACK_LOST_OPACITY } from "./style";
+import { egoToScene, mapToScene } from "./frames";
+import { LINE_WIDTH_M, palette, STACK_LOST_FADE_S, STACK_LOST_OPACITY } from "./style";
 
 import carUrl from "../assets/meshes/car.glb?url";
 import suvUrl from "../assets/meshes/suv.glb?url";
@@ -51,12 +51,36 @@ const BOX_GEOM = new THREE.BoxGeometry(1, 1, 1);
 // Lead vehicle alert ring height: on the ground, just above the trajectory (0.03 m).
 const RING_Y = 0.04;
 
-// Ego-frame record: raw detector position used to re-derive scene pose each
-// frame with the current ego pose, so objects track the moving ego correctly.
-// distM is the stack's distance_m, when it sends one.
-type EgoRecord = { ox: number; oy: number; oyaw: number; atMs: number; distM?: number };
-// Map-frame record: scene position is fixed in world space between messages.
-type SceneRecord = { x: number; z: number; ry: number; atMs: number; distM?: number };
+// An object pose in its message frame (design section 5.1).
+export type Pose = { x: number; y: number; yaw: number };
+// A move from the pose drawn when a message arrived to that message's pose.
+export type Motion = { from: Pose; to: Pose; atMs: number; durMs: number };
+
+// After a long gap (a lost stack, a late id) the move takes this long at most.
+const MAX_MOVE_MS = 250;
+
+// The pose drawn at nowMs: from → to over durMs, never past to.
+export function poseAt(m: Motion, nowMs: number): Pose {
+  const a = m.durMs > 0 ? Math.min(1, Math.max(0, (nowMs - m.atMs) / m.durMs)) : 1;
+  return {
+    x: m.from.x + a * (m.to.x - m.from.x),
+    y: m.from.y + a * (m.to.y - m.from.y),
+    yaw: wrapAngle(m.from.yaw + a * wrapAngle(m.to.yaw - m.from.yaw)),
+  };
+}
+
+// Starts a move to a new message pose from the pose drawn now, so the object
+// does not jump. The move takes one message interval: the object reaches the
+// pose about when the next message is due, and stops there if none comes.
+export function retarget(m: Motion | null, to: Pose, nowMs: number): Motion {
+  if (!m) return { from: to, to, atMs: nowMs, durMs: 0 };
+  return {
+    from: poseAt(m, nowMs),
+    to,
+    atMs: nowMs,
+    durMs: Math.min(MAX_MOVE_MS, nowMs - m.atMs),
+  };
+}
 
 type Entry = {
   outer: THREE.Group;
@@ -68,14 +92,12 @@ type Entry = {
   opacity: number;
   isLead: boolean;
   frame: "ego" | "map";
-  prev: EgoRecord | SceneRecord | null;
-  curr: EgoRecord | SceneRecord | null;
-  // Lead vehicle extras (created lazily when isLead first becomes true).
-  ring: THREE.Mesh | null; // alert ring, direct child of scene
-  labelSprite: THREE.Sprite | null; // distance label, direct child of scene
-  labelCanvas: HTMLCanvasElement | null;
-  labelTexture: THREE.CanvasTexture | null;
-  lastLabelDistM: number; // track last rendered value to avoid needless redraws
+  // Ego-frame poses stay in the ego frame: tick() places them with the live
+  // ego pose each frame, so objects track the moving ego correctly.
+  motion: Motion | null;
+  distM?: number; // the stack's distance_m, when it sends one
+  // Lead vehicle alert ring (created lazily when the lead first gets an alert).
+  ring: THREE.Mesh | null; // direct child of scene
 };
 
 function wrapAngle(a: number): number {
@@ -199,13 +221,8 @@ export class ObjectManager {
       opacity: 0,
       isLead,
       frame: "map", // overwritten by update() on first message
-      prev: null,
-      curr: null,
+      motion: null,
       ring: null,
-      labelSprite: null,
-      labelCanvas: null,
-      labelTexture: null,
-      lastLabelDistM: -1,
     };
   }
 
@@ -235,17 +252,8 @@ export class ObjectManager {
         for (const mat of entry.mats) mat.color.setHex(color);
       }
 
-      // Store the record type that matches the frame so tick() can interpolate
-      // correctly. Ego-frame records keep raw detector coords; tick() applies
-      // egoToScene with the live ego pose each frame so objects track the ego
-      // even between 10 Hz message arrivals.
-      entry.prev = entry.curr;
-      const distM = obj.distance_m;
-      if (frame === "ego") {
-        entry.curr = { ox: obj.x, oy: obj.y, oyaw: obj.yaw, atMs: nowMs, distM } as EgoRecord;
-      } else {
-        entry.curr = { x: obj.y, z: obj.x, ry: obj.yaw, atMs: nowMs, distM } as SceneRecord;
-      }
+      entry.motion = retarget(entry.motion, { x: obj.x, y: obj.y, yaw: obj.yaw }, nowMs);
+      entry.distM = obj.distance_m;
       entry.fadingOut = false;
       entry.frozen = false;
     }
@@ -271,7 +279,6 @@ export class ObjectManager {
           entry.opacity = Math.max(STACK_LOST_OPACITY, entry.opacity - dt / STACK_LOST_FADE_S);
         }
         for (const mat of entry.mats) mat.opacity = entry.opacity;
-        if (entry.labelSprite) entry.labelSprite.material.opacity = entry.opacity;
         const frozenShadow = entry.opacity > 0.5;
         for (const mesh of entry.meshes) mesh.castShadow = frozenShadow;
         continue;
@@ -289,130 +296,63 @@ export class ObjectManager {
         entry.opacity = Math.min(1, entry.opacity + dt / FADE_IN_S);
       }
 
-      // Interpolate position between the last two received poses and apply.
-      if (entry.curr) {
-        let x: number;
-        let z: number;
-        let ry: number;
-
+      // Move toward the newest message pose and apply.
+      if (entry.motion) {
+        const p = poseAt(entry.motion, nowMs);
         if (entry.frame === "ego") {
-          const curr = entry.curr as EgoRecord;
-          let ox = curr.ox;
-          let oy = curr.oy;
-          let oyaw = curr.oyaw;
-
-          if (entry.prev) {
-            const prev = entry.prev as EgoRecord;
-            const interval = curr.atMs - prev.atMs;
-            if (interval > 0) {
-              // Alpha is measured from prev so position reaches curr immediately
-              // when the message arrives, then dead-reckons forward one interval.
-              const alpha = Math.min(2, Math.max(0, (nowMs - prev.atMs) / interval));
-              ox = prev.ox + alpha * (curr.ox - prev.ox);
-              oy = prev.oy + alpha * (curr.oy - prev.oy);
-              oyaw = wrapAngle(prev.oyaw + alpha * wrapAngle(curr.oyaw - prev.oyaw));
-            }
-          }
-
           // Re-derive scene pose from live ego position every frame — this is
           // what prevents the oscillation: the world-space result updates at
           // 60 Hz even though object messages arrive at 10 Hz.
-          const p = egoToScene(ox, oy, oyaw, egoSceneX, egoSceneZ, egoYaw);
-          x = p.x;
-          z = p.z;
-          ry = p.ry;
+          const s = egoToScene(p.x, p.y, p.yaw, egoSceneX, egoSceneZ, egoYaw);
+          entry.outer.position.set(s.x, 0, s.z);
+          entry.outer.rotation.y = s.ry;
         } else {
-          const curr = entry.curr as SceneRecord;
-          x = curr.x;
-          z = curr.z;
-          ry = curr.ry;
-
-          if (entry.prev) {
-            const prev = entry.prev as SceneRecord;
-            const interval = curr.atMs - prev.atMs;
-            if (interval > 0) {
-              const alpha = Math.min(2, Math.max(0, (nowMs - prev.atMs) / interval));
-              x = prev.x + alpha * (curr.x - prev.x);
-              z = prev.z + alpha * (curr.z - prev.z);
-              ry = wrapAngle(prev.ry + alpha * wrapAngle(curr.ry - prev.ry));
-            }
-          }
+          const s = mapToScene(p.x, p.y);
+          entry.outer.position.set(s.x, 0, s.z);
+          entry.outer.rotation.y = p.yaw;
         }
-
-        entry.outer.position.set(x, 0, z);
-        entry.outer.rotation.y = ry;
-        entry.ring?.position.set(x, RING_Y, z);
+        entry.ring?.position.set(entry.outer.position.x, RING_Y, entry.outer.position.z);
       }
 
       for (const mat of entry.mats) mat.opacity = entry.opacity;
       // Shadow only when the mesh is mostly visible to avoid ghost shadows.
       const shadow = entry.opacity > 0.5;
       for (const mesh of entry.meshes) mesh.castShadow = shadow;
-
-      // Lead vehicle label: distance text above the vehicle.
-      if (entry.isLead && entry.curr) {
-        if (!entry.labelSprite) {
-          const canvas = document.createElement("canvas");
-          canvas.width = 128;
-          canvas.height = 48;
-          const texture = new THREE.CanvasTexture(canvas);
-          const mat = new THREE.SpriteMaterial({ map: texture, depthTest: false });
-          const sprite = new THREE.Sprite(mat);
-          sprite.scale.set(3, 1.1, 1);
-          this.scene.add(sprite);
-          entry.labelCanvas = canvas;
-          entry.labelTexture = texture;
-          entry.labelSprite = sprite;
-        }
-        // Position label 1 m above the vehicle top in world space.
-        entry.labelSprite.position.set(
-          entry.outer.position.x,
-          entry.outer.scale.y + 1,
-          entry.outer.position.z,
-        );
-        entry.labelSprite.material.opacity = entry.opacity;
-        entry.labelSprite.visible = true;
-
-        // Redraw canvas only when rounded distance changes.
-        const distM = entry.curr ? this.getDistM(entry.curr, egoSceneX, egoSceneZ) : null;
-        const rounded = distM !== null ? Math.round(distM) : -1;
-        if (rounded !== entry.lastLabelDistM) {
-          entry.lastLabelDistM = rounded;
-          const ctx = entry.labelCanvas!.getContext("2d")!;
-          ctx.clearRect(0, 0, 128, 48);
-          if (rounded >= 0) {
-            ctx.fillStyle = cssHex(palette.lead);
-            ctx.font = "bold 22px system-ui,sans-serif";
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            ctx.fillText(`${rounded} m`, 64, 24);
-          }
-          entry.labelTexture!.needsUpdate = true;
-        }
-      } else if (entry.labelSprite) {
-        entry.labelSprite.visible = false;
-      }
     }
   }
 
   // Distance in meters: the stack's distance_m when sent, otherwise measured from ego.
-  private getDistM(rec: EgoRecord | SceneRecord, egoSceneX: number, egoSceneZ: number): number {
-    if (rec.distM != null) return rec.distM;
+  // It uses the newest message pose, not the drawn one.
+  private getDistM(entry: Entry, egoSceneX: number, egoSceneZ: number): number {
+    if (entry.distM != null) return entry.distM;
+    const { x, y } = entry.motion!.to;
     // ego frame: distance = hypot of raw detector position
-    if ("ox" in rec) return Math.hypot(rec.ox, rec.oy);
+    if (entry.frame === "ego") return Math.hypot(x, y);
     // map frame: measure from ego scene position, not map origin
-    return Math.hypot(rec.x - egoSceneX, rec.z - egoSceneZ);
+    const s = mapToScene(x, y);
+    return Math.hypot(s.x - egoSceneX, s.z - egoSceneZ);
+  }
+
+  // The lead vehicle while the stack is live: not frozen and not fading out.
+  private liveLead(): Entry | undefined {
+    for (const entry of this.tracked.values()) {
+      if (entry.isLead && entry.motion && !entry.frozen && !entry.fadingOut) return entry;
+    }
   }
 
   // Distance to the live lead vehicle, or null when there is none or the stack
   // is lost. The HUD uses it so the panel and the label show the same number.
   leadDistM(egoSceneX: number, egoSceneZ: number): number | null {
-    for (const entry of this.tracked.values()) {
-      if (entry.isLead && entry.curr && !entry.frozen && !entry.fadingOut) {
-        return this.getDistM(entry.curr, egoSceneX, egoSceneZ);
-      }
-    }
-    return null;
+    const lead = this.liveLead();
+    return lead ? this.getDistM(lead, egoSceneX, egoSceneZ) : null;
+  }
+
+  // Scene point 0.5 m above the live lead vehicle's roof, where main.ts puts
+  // the distance label. Null when leadDistM is null.
+  leadLabelPoint(): THREE.Vector3 | null {
+    const lead = this.liveLead();
+    if (!lead) return null;
+    return lead.outer.position.clone().setY(lead.outer.scale.y + 0.5);
   }
 
   // Show or hide the alert ring on the lead vehicle (design §6.3 Alert state).
@@ -440,7 +380,6 @@ export class ObjectManager {
       const color = entry.isLead ? palette.lead : palette.traffic;
       for (const mat of entry.mats) mat.color.setHex(color);
       if (entry.ring) (entry.ring.material as THREE.MeshBasicMaterial).color.setHex(palette.alert);
-      entry.lastLabelDistM = -1; // redraw the label in the new lead color
     }
   }
 
@@ -454,11 +393,6 @@ export class ObjectManager {
 
   private disposeEntry(entry: Entry): void {
     for (const mat of entry.mats) mat.dispose();
-    if (entry.labelSprite) {
-      this.scene.remove(entry.labelSprite);
-      entry.labelTexture?.dispose();
-      (entry.labelSprite.material as THREE.SpriteMaterial).dispose();
-    }
     if (entry.ring) {
       this.scene.remove(entry.ring);
       entry.ring.geometry.dispose();

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { fetchConfig } from "./config";
 import { connectEndpoint } from "./ws";
+import { isWellFormed } from "./messages";
 import {
   setRoles,
   recordMessage,
@@ -17,7 +18,7 @@ import { createCameraController, type CameraController } from "./camera";
 import { mapToScene, yawToSceneRotation } from "./frames";
 import { ObjectManager, type RawObject } from "./objects";
 import { replaceEgoMesh } from "./ego";
-import { Hud, scaleWithViewport, type HudData } from "./hud";
+import { Hud, leadLabelText, type HudData } from "./hud";
 import { AlertPill, collectAlerts, type Banner } from "./alert";
 import { LaneManager, type RawLane } from "./lanes";
 import { TrajectoryRibbon } from "./trajectory";
@@ -52,6 +53,7 @@ type StatusMsg = {
 const status = document.getElementById("status")!;
 const credit = document.getElementById("credit")!;
 const frameEl = document.getElementById("frame")!;
+const leadLabel = document.getElementById("lead-label")!;
 const rejected = new Map<string, number>();
 let configError: string | null = null;
 
@@ -91,7 +93,6 @@ const objManager = new ObjectManager(scene);
 const laneManager = new LaneManager(scene);
 const trajectory = new TrajectoryRibbon(scene);
 const hud = new Hud();
-scaleWithViewport(document.getElementById("bottom-left")!);
 const alertPill = new AlertPill();
 const machine = new StateMachine();
 const pip = new CameraPip();
@@ -397,6 +398,20 @@ function animate() {
   trajectory.tick(dt);
   alertPill.tick(dt);
   renderer.render(scene, camera);
+
+  // Lead distance label: an HTML element at a fixed screen size, placed after
+  // the render so the camera matrices are this frame's. It hides with the
+  // lead, which includes the ghost states. z > 1: behind the camera.
+  const labelPoint = objManager.leadLabelPoint()?.project(camera);
+  if (leadDistM !== null && labelPoint && labelPoint.z < 1) {
+    leadLabel.textContent = leadLabelText(leadDistM, leadGapS);
+    const x = ((labelPoint.x + 1) / 2) * window.innerWidth;
+    const y = ((1 - labelPoint.y) / 2) * window.innerHeight;
+    leadLabel.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`;
+    leadLabel.hidden = false;
+  } else {
+    leadLabel.hidden = true;
+  }
 }
 animate();
 
@@ -426,6 +441,7 @@ fetchConfig()
           rejected.set(n, schema);
         },
         onMessage: (n, msg) => {
+          if (!isWellFormed(msg)) return; // one bad message must not stop the frame loop
           recordMessage(n, msg);
           machine.onMessage(n, msg);
         },

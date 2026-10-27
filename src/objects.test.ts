@@ -1,33 +1,7 @@
-import { describe, it, expect, beforeEach, beforeAll } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import * as THREE from "three";
 import { egoToScene } from "./frames";
-import { ObjectManager, type RawObject } from "./objects";
-
-// Minimal canvas mock for tests that exercise the lead-vehicle label sprite.
-// The test environment has no DOM, so `document.createElement("canvas")` would throw.
-function mockCanvas() {
-  const ctx = {
-    clearRect: () => {},
-    fillText: () => {},
-    fillStyle: "" as string,
-    font: "" as string,
-    textAlign: "" as string,
-    textBaseline: "" as string,
-  };
-  return {
-    width: 0,
-    height: 0,
-    getContext: () => ctx,
-  };
-}
-
-beforeAll(() => {
-  if (typeof (globalThis as Record<string, unknown>).document === "undefined") {
-    (globalThis as Record<string, unknown>).document = {
-      createElement: (_tag: string) => mockCanvas(),
-    };
-  }
-});
+import { ObjectManager, poseAt, retarget, type Motion, type RawObject } from "./objects";
 
 // ---------------------------------------------------------------------------
 // egoToScene — pure function
@@ -70,6 +44,58 @@ describe("egoToScene", () => {
   it("adds egoYaw and object yaw for scene rotation", () => {
     const p = egoToScene(0, 0, Math.PI / 4, 0, 0, Math.PI / 4);
     expect(p.ry).toBeCloseTo(Math.PI / 2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Object motion between messages — pure functions
+// ---------------------------------------------------------------------------
+
+describe("object motion", () => {
+  // Message k arrives at arriveMs(k), and main.ts picks it up on the next
+  // 60 Hz frame. Returns the drawn x at every frame for 2 s.
+  function drive(xs: number[], arriveMs = (k: number) => k * 100): number[] {
+    let m: Motion | null = null;
+    const drawn: number[] = [];
+    let k = 0;
+    for (let i = 0; i < 120; i++) {
+      const t = (i * 1000) / 60;
+      if (k < xs.length && t >= arriveMs(k)) {
+        const before = m ? poseAt(m, t).x : xs[k];
+        m = retarget(m, { x: xs[k], y: 0, yaw: 0 }, t);
+        expect(poseAt(m, t).x).toBeCloseTo(before, 9); // no jump at message arrival
+        k++;
+      }
+      drawn.push(poseAt(m!, t).x);
+    }
+    return drawn;
+  }
+
+  it("moves a constant-speed object smoothly", () => {
+    const drawn = drive([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]); // 10 m/s
+    for (let i = 1; i < drawn.length; i++) {
+      const step = drawn[i] - drawn[i - 1];
+      expect(step).toBeGreaterThanOrEqual(0);
+      expect(step).toBeLessThan(0.17); // 10 m/s is 1/6 m per frame
+    }
+    expect(drawn[drawn.length - 1]).toBeCloseTo(9);
+  });
+
+  it("never passes the last reported position of an object that stops", () => {
+    // Every other message is 20 ms late, so some moves start mid-way.
+    const drawn = drive([0, 1, 2, 3, 4, 4, 4, 4], (k) => k * 100 + (k % 2) * 20);
+    expect(Math.max(...drawn)).toBeLessThanOrEqual(4);
+    expect(drawn[drawn.length - 1]).toBe(4);
+  });
+
+  it("turns the short way across ±π", () => {
+    const m = retarget(retarget(null, { x: 0, y: 0, yaw: 3.1 }, 0), { x: 0, y: 0, yaw: -3.1 }, 100);
+    expect(Math.abs(poseAt(m, 150).yaw)).toBeCloseTo(Math.PI, 2);
+  });
+
+  it("does not stretch the move over a long message gap", () => {
+    const m = retarget(retarget(null, { x: 0, y: 0, yaw: 0 }, 0), { x: 5, y: 0, yaw: 0 }, 5000);
+    expect(poseAt(m, 5300).x).toBe(5);
   });
 });
 
@@ -139,18 +165,6 @@ describe("ObjectManager fade", () => {
     expect(tracked.has(1)).toBe(true); // object stays in scene
   });
 
-  it("label sprite is removed from scene when object fades out", () => {
-    mgr.update([makeObj(1, true)], "map"); // lead=true so label sprite is created
-    mgr.tick(0.3, 0, 0, 0); // fully faded in — sprite is created and positioned
-    const spritesBefore = scene.children.filter((c) => c instanceof THREE.Sprite).length;
-    expect(spritesBefore).toBe(1);
-
-    mgr.update([], "map"); // object removed
-    mgr.tick(0.5, 0, 0, 0); // full fade-out — entry deleted, sprite removed
-    const spritesAfter = scene.children.filter((c) => c instanceof THREE.Sprite).length;
-    expect(spritesAfter).toBe(0);
-  });
-
   it("setLeadAlert(false) hides ring on former lead when lead flag moves to another id", () => {
     mgr.update([makeObj(1, true), makeObj(2, false)], "map");
     mgr.tick(0.3, 0, 0, 0);
@@ -192,13 +206,14 @@ describe("ObjectManager fade", () => {
     expect(center.y).toBeLessThan(0.1);
   });
 
-  it("label sprite fades with the car when the stack is lost", () => {
-    mgr.update([makeObj(1, true)], "map");
-    mgr.tick(0.3, 0, 0, 0);
+  it("leadLabelPoint is 0.5 m above the live lead's roof, null once the stack is lost", () => {
+    // Map (30, 2) is scene (x=2, z=30); makeObj height is 1.5 m.
+    mgr.update([{ ...makeObj(1, true), x: 30, y: 2 }], "map");
+    mgr.tick(0, 0, 0, 0);
+    const p = mgr.leadLabelPoint()!;
+    expect([p.x, p.y, p.z]).toEqual([2, 2, 30]);
     mgr.stackLost();
-    mgr.tick(0.5, 0, 0, 0);
-    const sprite = scene.children.find((c) => c instanceof THREE.Sprite) as THREE.Sprite;
-    expect(sprite.material.opacity).toBeCloseTo(0.15, 2);
+    expect(mgr.leadLabelPoint()).toBeNull();
   });
 
   it("leadDistM prefers distance_m from the stack", () => {
