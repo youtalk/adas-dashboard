@@ -316,7 +316,7 @@ The scene fills the page at any aspect ratio. The booth monitor is 1920 by 1080.
 
 ![Layer legend](mockups/05-layers.png)
 
-Bottom to top: map lanes (grey, to the horizon). Perceived lanes (cyan, only where reported). Trajectory (green ribbon, `width_m` wide). Objects (glTF meshes, blue traffic, red lead vehicle with a distance label above it). Ego (white mesh with a soft ground shadow). The camera follows the ego heading with a short lerp so lane changes read as the car moving sideways.
+Bottom to top: map lanes (grey, to the horizon). Perceived lanes (cyan, only where reported). Trajectory (green ribbon, `width_m` wide). Objects (glTF meshes, blue traffic, red lead vehicle with a distance label above it). Ego (white mesh with a soft ground shadow). The ego mesh has its rear axle on `pose_map`, with the body center 1.4 m ahead. The camera follows the ego heading with a short lerp so lane changes read as the car moving sideways.
 
 Object motion is interpolated between messages by `id`. A new `id` fades in over 300 ms. An `id` that stops arriving fades out over 500 ms. Meshes are chosen by `class`. A `class` with no mesh uses a plain box of the given size.
 

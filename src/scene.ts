@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { EGO_REAR_AXLE_TO_CENTER } from "./ego";
 import { palette } from "./style";
 
 export function createScene(container: HTMLElement) {
@@ -47,6 +48,7 @@ export function createScene(container: HTMLElement) {
     new THREE.BoxGeometry(1.8, 1.5, 4.5),
     new THREE.MeshStandardMaterial({ color: palette.ego }),
   );
+  egoBox.position.z = EGO_REAR_AXLE_TO_CENTER;
   egoBox.castShadow = true;
   egoGroup.add(egoBox);
   egoGroup.position.y = 0.75;
