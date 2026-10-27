@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { fetchConfig } from "./config";
 import { connectEndpoint } from "./ws";
+import { isWellFormed } from "./messages";
 import {
   setRoles,
   recordMessage,
@@ -433,6 +434,7 @@ fetchConfig()
           rejected.set(n, schema);
         },
         onMessage: (n, msg) => {
+          if (!isWellFormed(msg)) return; // one bad message must not stop the frame loop
           recordMessage(n, msg);
           machine.onMessage(n, msg);
         },
