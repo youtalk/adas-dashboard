@@ -3,6 +3,12 @@
 export const STACK_LOST_OPACITY = 0.15;
 export const STACK_LOST_FADE_S = 0.5;
 
+// Painted lines on the road (design section 6.5): lane lines, road edges and
+// the lead vehicle ring are this wide. A dashed lane is DASH_M on, GAP_M off.
+export const LINE_WIDTH_M = 0.15;
+export const DASH_M = 3;
+export const GAP_M = 6;
+
 // Toggle a material's transparency. three.js compiles an opaque material with
 // alpha forced to 1, so the program must be rebuilt when the flag changes, or
 // the stack lost opacity has no effect on screen.

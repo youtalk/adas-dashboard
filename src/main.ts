@@ -26,7 +26,8 @@ import { StateMachine, isGhost, readInputs, type PageState } from "./states";
 import { CameraPip } from "./pip";
 import { bindKeys, toggleFullscreen } from "./keys";
 import { applyTheme, type Theme } from "./theme";
-import { palette } from "./style";
+import { DASH_M, GAP_M, LINE_WIDTH_M, palette } from "./style";
+import { dashes, strip } from "./strip";
 
 type PoseMap = { x: number; y: number; yaw: number };
 type EgoMsg = {
@@ -97,37 +98,29 @@ replaceEgoMesh(egoMesh as THREE.Group).catch((e: unknown) => {
   console.warn("ego mesh load failed:", e);
 });
 
-// Map geometry: rebuilt only when a new map message arrives.
+// Map geometry: rebuilt only when a new map message arrives. All map lines
+// are flat strips in one mesh, 0.01 m above the road to avoid z-fighting.
 const DRAWABLE_KINDS = new Set(["lane_solid", "lane_dashed", "road_edge"]);
-const mapLineMaterial = new THREE.LineBasicMaterial({ color: palette.mapLane });
-const mapLines: THREE.Line[] = [];
+const mapLineMaterial = new THREE.MeshBasicMaterial({
+  color: palette.mapLane,
+  side: THREE.DoubleSide,
+});
+const mapLines = new THREE.Mesh(new THREE.BufferGeometry(), mapLineMaterial);
+mapLines.renderOrder = -2; // under the perceived lanes (-1) and the trajectory (0), design 6.2
+scene.add(mapLines);
 let lastMapTms: number | undefined;
 
 function rebuildMapGeometry(mapMsg: MapMsg) {
-  for (const line of mapLines) {
-    line.geometry.dispose();
-    scene.remove(line);
-  }
-  mapLines.length = 0;
-
+  const positions: number[] = [];
   for (const feature of mapMsg.features) {
     if (!DRAWABLE_KINDS.has(feature.kind)) continue;
-    const pts = feature.pts;
-    if (pts.length < 2) continue;
-
-    const positions = new Float32Array(pts.length * 3);
-    for (let i = 0; i < pts.length; i++) {
-      const s = mapToScene(pts[i][0], pts[i][1]);
-      positions[i * 3] = s.x;
-      positions[i * 3 + 1] = 0.01;
-      positions[i * 3 + 2] = s.z;
-    }
-    const geom = new THREE.BufferGeometry();
-    geom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    const line = new THREE.Line(geom, mapLineMaterial);
-    scene.add(line);
-    mapLines.push(line);
+    const pts = feature.pts.map(([x, y]) => mapToScene(x, y));
+    const pieces = feature.kind === "lane_dashed" ? dashes(pts, DASH_M, GAP_M) : [pts];
+    for (const piece of pieces) strip(piece, LINE_WIDTH_M, 0.01, positions);
   }
+  mapLines.geometry.dispose();
+  mapLines.geometry = new THREE.BufferGeometry();
+  mapLines.geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
 }
 
 // --- theme (key t, design section 6.5) ---

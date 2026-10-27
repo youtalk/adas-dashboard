@@ -1,10 +1,18 @@
 import * as THREE from "three";
 import { toScene } from "./frames";
-import { palette, setTransparent, STACK_LOST_FADE_S, STACK_LOST_OPACITY } from "./style";
+import {
+  LINE_WIDTH_M,
+  palette,
+  setTransparent,
+  STACK_LOST_FADE_S,
+  STACK_LOST_OPACITY,
+} from "./style";
+import { strip } from "./strip";
 
 export type RawLane = { kind: string; pts: [number, number][] };
 
-type LaneLine = { kind: string; line: THREE.Line; capacity: number };
+// A lane line is a flat strip mesh (strip.ts).
+type LaneLine = { kind: string; line: THREE.Mesh; capacity: number };
 
 export class LaneManager {
   private scene: THREE.Scene;
@@ -36,7 +44,7 @@ export class LaneManager {
   setAlertKinds(kinds: string[]): void {
     this.alertKinds = kinds;
     for (const { kind, line } of this.lines) {
-      (line.material as THREE.LineBasicMaterial).color.setHex(
+      (line.material as THREE.MeshBasicMaterial).color.setHex(
         kinds.includes(kind) ? palette.alert : palette.lane,
       );
     }
@@ -50,17 +58,18 @@ export class LaneManager {
       return;
     }
 
-    // Synchronise the number of THREE.Line objects with the incoming lane count.
+    // Synchronise the number of lane meshes with the incoming lane count.
     while (this.lines.length > this.rawLanes.length) {
       const { line } = this.lines.pop()!;
-      (line.material as THREE.LineBasicMaterial).dispose();
+      (line.material as THREE.MeshBasicMaterial).dispose();
       line.geometry.dispose();
       this.scene.remove(line);
     }
     while (this.lines.length < this.rawLanes.length) {
       const geom = new THREE.BufferGeometry();
-      const mat = new THREE.LineBasicMaterial({ color: palette.lane });
-      const line = new THREE.Line(geom, mat);
+      const mat = new THREE.MeshBasicMaterial({ color: palette.lane, side: THREE.DoubleSide });
+      const line = new THREE.Mesh(geom, mat);
+      line.renderOrder = -1; // over the map lanes (-2), under the trajectory (0), design 6.2
       this.scene.add(line);
       this.lines.push({ kind: "", line, capacity: 0 });
     }
@@ -72,7 +81,7 @@ export class LaneManager {
       // Update kind and color when a new message arrives with different structure.
       if (entry.kind !== lane.kind) {
         entry.kind = lane.kind;
-        (entry.line.material as THREE.LineBasicMaterial).color.setHex(
+        (entry.line.material as THREE.MeshBasicMaterial).color.setHex(
           this.alertKinds.includes(lane.kind) ? palette.alert : palette.lane,
         );
       }
@@ -85,27 +94,23 @@ export class LaneManager {
       entry.line.visible = true;
 
       // Reallocate buffer only when size changes (avoids GPU reallocation each frame).
+      // The strip has 6 vertices per segment.
       if (entry.capacity !== n) {
         entry.line.geometry.setAttribute(
           "position",
-          new THREE.BufferAttribute(new Float32Array(n * 3), 3),
+          new THREE.BufferAttribute(new Float32Array((n - 1) * 18), 3),
         );
         entry.capacity = n;
       }
 
       const posAttr = entry.line.geometry.attributes.position as THREE.BufferAttribute;
-      const arr = posAttr.array as Float32Array;
-
-      for (let j = 0; j < n; j++) {
-        const [lx, ly] = lane.pts[j];
-        const p = toScene(this.frame, lx, ly, egoSceneX, egoSceneZ, egoYaw);
-        arr[j * 3] = p.x;
-        arr[j * 3 + 1] = 0.02; // slightly above road to avoid z-fighting
-        arr[j * 3 + 2] = p.z;
-      }
+      const pts = lane.pts.map(([lx, ly]) =>
+        toScene(this.frame, lx, ly, egoSceneX, egoSceneZ, egoYaw),
+      );
+      // 0.02 m: slightly above road and map lanes to avoid z-fighting.
+      (posAttr.array as Float32Array).set(strip(pts, LINE_WIDTH_M, 0.02));
 
       posAttr.needsUpdate = true;
-      entry.line.geometry.setDrawRange(0, n);
       entry.line.geometry.computeBoundingSphere();
     }
   }
@@ -124,7 +129,7 @@ export class LaneManager {
   private setOpacity(opacity: number): void {
     this.opacity = opacity;
     for (const { line } of this.lines) {
-      const mat = line.material as THREE.LineBasicMaterial;
+      const mat = line.material as THREE.MeshBasicMaterial;
       setTransparent(mat, opacity < 1);
       mat.opacity = opacity;
     }
@@ -132,7 +137,7 @@ export class LaneManager {
 
   clear(): void {
     for (const { line } of this.lines) {
-      (line.material as THREE.LineBasicMaterial).dispose();
+      (line.material as THREE.MeshBasicMaterial).dispose();
       line.geometry.dispose();
       this.scene.remove(line);
     }
