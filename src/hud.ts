@@ -21,6 +21,12 @@ const STEERING_RATIO = 15;
 
 const fmtInt = (n: number) => Math.round(n).toString();
 
+// Scene label above the lead vehicle, e.g. "32 m · 2.7 s" (mockup 01). Same
+// numbers as the status panel; gapS is null below 0.5 m/s.
+export function leadLabelText(distM: number, gapS: number | null): string {
+  return gapS !== null ? `${fmtInt(distM)} m · ${gapS.toFixed(1)} s` : `${fmtInt(distM)} m`;
+}
+
 export class Hud {
   private panel = document.getElementById("hud") as HTMLElement;
   private arrowEl = document.getElementById("hud-speed-arrow") as HTMLElement;

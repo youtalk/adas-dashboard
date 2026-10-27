@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { egoToScene, mapToScene } from "./frames";
-import { cssHex, palette, STACK_LOST_FADE_S, STACK_LOST_OPACITY } from "./style";
+import { palette, STACK_LOST_FADE_S, STACK_LOST_OPACITY } from "./style";
 
 import carUrl from "../assets/meshes/car.glb?url";
 import suvUrl from "../assets/meshes/suv.glb?url";
@@ -104,12 +104,8 @@ type Entry = {
   // ego pose each frame, so objects track the moving ego correctly.
   motion: Motion | null;
   distM?: number; // the stack's distance_m, when it sends one
-  // Lead vehicle extras (created lazily when isLead first becomes true).
-  ring: THREE.LineLoop | null; // alert ring, child of outer
-  labelSprite: THREE.Sprite | null; // distance label, direct child of scene
-  labelCanvas: HTMLCanvasElement | null;
-  labelTexture: THREE.CanvasTexture | null;
-  lastLabelDistM: number; // track last rendered value to avoid needless redraws
+  // Lead vehicle alert ring (created lazily when the lead first gets an alert).
+  ring: THREE.LineLoop | null; // child of outer
 };
 
 function wrapAngle(a: number): number {
@@ -235,10 +231,6 @@ export class ObjectManager {
       frame: "map", // overwritten by update() on first message
       motion: null,
       ring: null,
-      labelSprite: null,
-      labelCanvas: null,
-      labelTexture: null,
-      lastLabelDistM: -1,
     };
   }
 
@@ -295,7 +287,6 @@ export class ObjectManager {
           entry.opacity = Math.max(STACK_LOST_OPACITY, entry.opacity - dt / STACK_LOST_FADE_S);
         }
         for (const mat of entry.mats) mat.opacity = entry.opacity;
-        if (entry.labelSprite) entry.labelSprite.material.opacity = entry.opacity;
         const frozenShadow = entry.opacity > 0.5;
         for (const mesh of entry.meshes) mesh.castShadow = frozenShadow;
         continue;
@@ -334,49 +325,6 @@ export class ObjectManager {
       // Shadow only when the mesh is mostly visible to avoid ghost shadows.
       const shadow = entry.opacity > 0.5;
       for (const mesh of entry.meshes) mesh.castShadow = shadow;
-
-      // Lead vehicle label: distance text above the vehicle.
-      if (entry.isLead && entry.motion) {
-        if (!entry.labelSprite) {
-          const canvas = document.createElement("canvas");
-          canvas.width = 128;
-          canvas.height = 48;
-          const texture = new THREE.CanvasTexture(canvas);
-          const mat = new THREE.SpriteMaterial({ map: texture, depthTest: false });
-          const sprite = new THREE.Sprite(mat);
-          sprite.scale.set(3, 1.1, 1);
-          this.scene.add(sprite);
-          entry.labelCanvas = canvas;
-          entry.labelTexture = texture;
-          entry.labelSprite = sprite;
-        }
-        // Position label 1 m above the vehicle top in world space.
-        entry.labelSprite.position.set(
-          entry.outer.position.x,
-          entry.outer.scale.y + 1,
-          entry.outer.position.z,
-        );
-        entry.labelSprite.material.opacity = entry.opacity;
-        entry.labelSprite.visible = true;
-
-        // Redraw canvas only when rounded distance changes.
-        const rounded = Math.round(this.getDistM(entry, egoSceneX, egoSceneZ));
-        if (rounded !== entry.lastLabelDistM) {
-          entry.lastLabelDistM = rounded;
-          const ctx = entry.labelCanvas!.getContext("2d")!;
-          ctx.clearRect(0, 0, 128, 48);
-          if (rounded >= 0) {
-            ctx.fillStyle = cssHex(palette.lead);
-            ctx.font = "bold 22px system-ui,sans-serif";
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            ctx.fillText(`${rounded} m`, 64, 24);
-          }
-          entry.labelTexture!.needsUpdate = true;
-        }
-      } else if (entry.labelSprite) {
-        entry.labelSprite.visible = false;
-      }
     }
   }
 
@@ -392,15 +340,26 @@ export class ObjectManager {
     return Math.hypot(s.x - egoSceneX, s.z - egoSceneZ);
   }
 
+  // The lead vehicle while the stack is live: not frozen and not fading out.
+  private liveLead(): Entry | undefined {
+    for (const entry of this.tracked.values()) {
+      if (entry.isLead && entry.motion && !entry.frozen && !entry.fadingOut) return entry;
+    }
+  }
+
   // Distance to the live lead vehicle, or null when there is none or the stack
   // is lost. The HUD uses it so the panel and the label show the same number.
   leadDistM(egoSceneX: number, egoSceneZ: number): number | null {
-    for (const entry of this.tracked.values()) {
-      if (entry.isLead && entry.motion && !entry.frozen && !entry.fadingOut) {
-        return this.getDistM(entry, egoSceneX, egoSceneZ);
-      }
-    }
-    return null;
+    const lead = this.liveLead();
+    return lead ? this.getDistM(lead, egoSceneX, egoSceneZ) : null;
+  }
+
+  // Scene point 0.5 m above the live lead vehicle's roof, where main.ts puts
+  // the distance label. Null when leadDistM is null.
+  leadLabelPoint(): THREE.Vector3 | null {
+    const lead = this.liveLead();
+    if (!lead) return null;
+    return lead.outer.position.clone().setY(lead.outer.scale.y + 0.5);
   }
 
   // Show or hide the alert ring on the lead vehicle (design §6.3 Alert state).
@@ -424,7 +383,6 @@ export class ObjectManager {
       const color = entry.isLead ? palette.lead : palette.traffic;
       for (const mat of entry.mats) mat.color.setHex(color);
       if (entry.ring) (entry.ring.material as THREE.LineBasicMaterial).color.setHex(palette.alert);
-      entry.lastLabelDistM = -1; // redraw the label in the new lead color
     }
   }
 
@@ -438,11 +396,6 @@ export class ObjectManager {
 
   private disposeEntry(entry: Entry): void {
     for (const mat of entry.mats) mat.dispose();
-    if (entry.labelSprite) {
-      this.scene.remove(entry.labelSprite);
-      entry.labelTexture?.dispose();
-      (entry.labelSprite.material as THREE.SpriteMaterial).dispose();
-    }
     if (entry.ring) {
       (entry.ring.material as THREE.LineBasicMaterial).dispose();
     }
