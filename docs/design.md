@@ -73,6 +73,7 @@ The schema is versioned. JSON Schema files live in `schema/v1/`. The page reject
 - Units: meters, radians, meters per second, meters per second squared. Angles are counterclockwise positive.
 - Frames: `ego` is x forward, y left, z up, origin at the center of the ego vehicle's rear axle on the ground. `map` is the map's own fixed frame. A message with geometry names its frame. If no `vehicle` message with `pose_map` exists, `map` frame geometry is not drawn.
 - Fields marked `?` are optional. Unknown fields are ignored.
+- The page drops a message of a known type when a required array field is not an array or a required number field is not a number, so one malformed message cannot freeze the screen.
 
 ### 5.2 Messages
 
@@ -90,7 +91,7 @@ The schema is versioned. JSON Schema files live in `schema/v1/`. The page reject
 }
 ```
 
-`ego` (role `vehicle`, 10 to 50 Hz):
+`ego` (role `vehicle`, 10 to 50 Hz). `steer_rad` is the road wheel angle, left positive, as CARLA and Autoware report it.
 
 ```json
 {
@@ -309,13 +310,13 @@ This adapter is a future task in `adapters/autoware/`, not part of the CES 2027 
 
 ![Driving state](mockups/01-driving.png)
 
-The scene fills the page at any aspect ratio. The booth monitor is 1920 by 1080. The status panel (bottom left) is about 240 by 170 px at that size and scales with the viewport height. The camera picture-in-picture (top right) is about 230 by 130 px. The `c` key minimizes it to a 40 px pill. It is an `<iframe>` of the raw camera stream URL given in the configuration. The page draws nothing on top of the camera image.
+The scene fills the page at any aspect ratio. The booth monitor is 1920 by 1080. The status panel (bottom left) is about 480 by 340 px at that size. The camera picture-in-picture (top right) is about 460 by 260 px. It is an `<iframe>` of the raw camera stream URL given in the configuration. The page draws nothing on top of the camera image. The `c` key minimizes it to an 80 px pill. These sizes are CSS px, so browser zoom (Ctrl + and Ctrl −) makes the status panel, the camera picture-in-picture and the pill larger or smaller on each screen. The browser keeps the zoom for the site. The scene does not change with the zoom.
 
 ### 6.2 Layers
 
 ![Layer legend](mockups/05-layers.png)
 
-Bottom to top: map lanes (grey, to the horizon). Perceived lanes (cyan, only where reported). Trajectory (green ribbon, `width_m` wide). Objects (glTF meshes, blue traffic, red lead vehicle with a distance label above it). Ego (white mesh with a soft ground shadow). The camera follows the ego heading with a short lerp so lane changes read as the car moving sideways.
+Bottom to top: map lanes (grey, to the horizon). Perceived lanes (cyan, only where reported). Trajectory (green ribbon, `width_m` wide). Objects (glTF meshes, blue traffic, red lead vehicle with a distance label above it). Ego (white mesh with a soft ground shadow). The ego mesh has its rear axle on `pose_map`, with the body center 1.4 m ahead. The camera follows the ego heading with a short lerp so lane changes read as the car moving sideways.
 
 Object motion is interpolated between messages by `id`. A new `id` fades in over 300 ms. An `id` that stops arriving fades out over 500 ms. Meshes are chosen by `class`. A `class` with no mesh uses a plain box of the given size.
 
@@ -328,7 +329,7 @@ Two independent signals decide the state: whether the `stack` endpoint is alive,
 | Connecting | no endpoint has sent `hello`                              | dark scene and the map. A small `Waiting for vehicle...` at the bottom left. Nothing large                                                                                                                    |
 | Driving    | `stack` alive, `authority = stack`, no alert above `info` | section 6.1                                                                                                                                                                                                   |
 | Alert      | `stack` alive, an alert with `warn` or `critical`         | see below                                                                                                                                                                                                     |
-| Stack lost | `stack` endpoint closed, or `status.mode = lost`          | stack layers fade to 15 percent opacity over 500 ms, pill `<stack name> lost`, camera PiP shows `camera lost` on its last frame                                                                               |
+| Stack lost | `stack` endpoint closed, or `status.mode = lost`          | stack layers fade to 15 percent opacity over 500 ms, pill `<stack name> lost` that pulses like `critical`, camera PiP shows `camera lost` on its last frame                                                   |
 | Takeover   | `authority = supervisor`                                  | Stack lost plus an amber page frame. The pill shows the supervisor's `alerts[].text`. The speed shows a down arrow. The pedal bar shows `control.accel_mps2`. The status line shows the supervisor's `status` |
 | Stopped    | Takeover and `speed_mps < 0.1` for 1 s                    | pill `Stopped by <supervisor name>`, frame stays amber, held until a `stack` `status.mode = active` arrives, then a 1 s fade back to Driving                                                                  |
 
@@ -344,13 +345,13 @@ If the `vehicle` endpoint closes, the ego vehicle stops at its last pose. A smal
 
 ### 6.4 Status panel
 
-Bottom left, in this order. Speed as a large number with the unit. The speed limit in a small rounded box. The lead vehicle distance and time gap (`distance_m / speed_mps`, omitted below 0.5 m/s). A steering wheel icon that rotates with `steer_rad`. A horizontal pedal bar: green right of center for acceleration, red left of center for braking, amber during Takeover. One small line `<name> · <latency_ms> ms · <device>`. `units` in the configuration selects `mph` or `km/h`.
+Bottom left, in this order. Speed as a large number with the unit. The speed limit in a small rounded box. The lead vehicle distance and time gap (`distance_m / speed_mps`, omitted below 0.5 m/s). A steering wheel icon that rotates with `steer_rad` times 15, a typical steering ratio, so that it turns like a real steering wheel. A horizontal pedal bar: green right of center for acceleration, red left of center for braking, amber during Takeover. One small line `<name> · <latency_ms> ms · <device>`. `units` in the configuration selects `mph` or `km/h`.
 
 ### 6.5 Style
 
-Dark matte by default. Background gradient `#0b0f14` to `#1c2530`. Road `#161d26`. Map lanes `#4b5661`. Perceived lanes `#22d3ee`. Trajectory `#22c55e`. Traffic `#3b82f6`. Lead vehicle `#ef4444`. Ego `#d9d9d9`. Alert `#b91c1c`. Takeover `#fb923c`. All colors are CSS custom properties so the light theme (`t` key) only redefines tokens. Meshes use a flat material with one directional key light and a soft contact shadow. No bloom, no post-processing.
+Dark matte by default. Background gradient `#0b0f14` to `#1c2530`. Road `#161d26`. Map lanes `#4b5661`. Perceived lanes `#22d3ee`. Trajectory `#22c55e`, drawn at 40 percent opacity and ghosted to 8 percent in Stack lost. Traffic `#3b82f6`. Lead vehicle `#ef4444`. Ego `#d9d9d9`. Alert `#b91c1c`. Takeover `#fb923c`. All colors are CSS custom properties so the light theme (`t` key) only redefines tokens. Meshes use a flat material with one directional key light and a soft contact shadow. No bloom, no post-processing.
 
-Text in the scene uses a system sans-serif font. The pill text is at least 20 px at 1080p. The speed number is at least 40 px. The lead vehicle label is bold 20 px at every distance and shows the same distance and gap as the status panel.
+Text in the scene uses a system sans-serif font. The pill text is 40 px at browser zoom 100%. A long pill text wraps to more lines and stays clear of the camera picture-in-picture. The speed number is at least 40 px. The lead vehicle label is bold 20 px at every distance and shows the same distance and gap as the status panel.
 
 ## 7. Operator controls and configuration
 
@@ -381,6 +382,8 @@ Keyboard only, no on-screen buttons:
 ```
 
 URL query parameters override `config.json` key by key.
+
+Both camera presets use a 45° vertical field of view.
 
 ## 8. Frontend stack and repository layout
 
