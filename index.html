@@ -18,6 +18,7 @@
         --lead: #ef4444;
         --ego: #d9d9d9;
         --alert: #b91c1c;
+        --on-alert: #ffffff;
         --takeover: #fb923c;
         --ambient: #334455;
         --fg: #94a3b8;
@@ -28,11 +29,6 @@
         --center-mark: #4b5661;
         --accel: #22c55e;
         --brake: #ef4444;
-        --warn: #f59e0b;
-        --warn-bg: rgba(245, 158, 11, 0.15);
-        --warn-fg: #fcd34d;
-        --critical-bg: rgba(185, 28, 28, 0.2);
-        --critical-fg: #fca5a5;
         --takeover-strong: #c2410c;
         --on-takeover: #ffffff;
         --takeover-text: #fdba74;
@@ -51,6 +47,7 @@
         --lead: #dc2626;
         --ego: #ffffff;
         --alert: #b91c1c;
+        --on-alert: #ffffff;
         --takeover: #f97316;
         --ambient: #ffffff;
         --fg: #475569;
@@ -61,11 +58,6 @@
         --center-mark: #94a3b8;
         --accel: #16a34a;
         --brake: #dc2626;
-        --warn: #d97706;
-        --warn-bg: rgba(245, 158, 11, 0.18);
-        --warn-fg: #92400e;
-        --critical-bg: rgba(185, 28, 28, 0.12);
-        --critical-fg: #991b1b;
         --takeover-strong: #c2410c;
         --on-takeover: #ffffff;
         --takeover-text: #c2410c;
@@ -166,16 +158,12 @@
         letter-spacing: 0.08em;
         white-space: nowrap;
       }
-      #alert-pill[data-severity="warn"] {
-        background: var(--warn-bg);
-        border: 1px solid var(--warn);
-        color: var(--warn-fg);
-      }
+      #alert-pill[data-severity="warn"],
       #alert-pill[data-severity="critical"],
       #alert-pill[data-severity="lost"] {
-        background: var(--critical-bg);
+        background: var(--alert);
         border: 1px solid var(--alert);
-        color: var(--critical-fg);
+        color: var(--on-alert);
       }
       #alert-pill[data-severity="takeover"] {
         background: var(--takeover-strong);
@@ -513,7 +501,7 @@
           <svg id="hud-wheel" viewBox="-12 -12 24 24" width="32" height="32" aria-hidden="true">
             <circle r="11" fill="none" stroke="currentColor" stroke-width="1.5" />
             <circle r="2.5" fill="currentColor" />
-            <line x1="0" y1="-2.5" x2="0" y2="-11" stroke="currentColor" stroke-width="1.5" />
+            <!-- Three spokes (no top spoke), so the turn angle reads at a glance -->
             <line x1="0" y1="2.5" x2="0" y2="11" stroke="currentColor" stroke-width="1.5" />
             <line x1="-2.5" y1="0" x2="-11" y2="0" stroke="currentColor" stroke-width="1.5" />
             <line x1="2.5" y1="0" x2="11" y2="0" stroke="currentColor" stroke-width="1.5" />
