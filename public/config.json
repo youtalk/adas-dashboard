@@ -1,6 +1,10 @@
 {
-  "endpoints": { "stack": "ws://127.0.0.1:8090/stack", "world": "ws://127.0.0.1:8091/world" },
-  "camera_url": "http://127.0.0.1:8080/",
+  "endpoints": {
+    "stack": "ws://127.0.0.1:8090/stack",
+    "world": "ws://127.0.0.1:8091/world",
+    "supervisor": "ws://127.0.0.1:8092/supervisor"
+  },
+  "camera_url": "data:text/html,<body style='margin:0;overflow:hidden;background:black'><img src='http://127.0.0.1:8080/stream?topic=/carla/hero/main_cam/image&type=mjpeg&quality=80&width=640&height=360' onerror='setTimeout(()=>{this.src=this.src},1000)' style='width:100%25;height:100%25;object-fit:cover'>",
   "units": "mph",
   "theme": "dark",
   "camera": {

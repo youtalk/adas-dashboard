@@ -16,7 +16,6 @@ export type EndpointHandle = {
 
 type Callbacks = {
   onHello: (name: string, hello: Hello) => void;
-  onSchemaMismatch: (name: string, schema: number) => void;
   onMessage: (name: string, msg: Record<string, unknown>) => void;
   onClose: (name: string) => void;
 };
@@ -24,13 +23,39 @@ type Callbacks = {
 const BACKOFF_MIN_MS = 500;
 const BACKOFF_MAX_MS = 5000;
 
+// Endpoint name -> the unsupported hello.schema it sent (design section 5).
+// Cleared when the endpoint later sends a good hello.
+export const rejected = new Map<string, number>();
+// Endpoints whose URL the browser rejected. A retry cannot help, so they stay.
+export const badUrls = new Set<string>();
+
+// Bottom-left line (design section 6.3): every bad URL and rejected endpoint,
+// then "Waiting for vehicle..." while Connecting or "vehicle link lost".
+export function connectionStatus(
+  rejected: Map<string, number>,
+  badUrls: Set<string>,
+  connecting: boolean,
+  vehicleLost: boolean,
+): string {
+  const parts = [...badUrls].map((name) => `${name}: bad URL`);
+  for (const [name, schema] of rejected) parts.push(`${name}: unsupported schema ${schema}`);
+  if (connecting) parts.push("Waiting for vehicle...");
+  else if (vehicleLost) parts.push("vehicle link lost");
+  return parts.join(", ");
+}
+
 export function connectEndpoint(name: string, url: string, cb: Callbacks): void {
   let backoff = BACKOFF_MIN_MS;
-  // Latches to true on a schema mismatch so reconnection stops permanently.
-  let schemaMismatch = false;
 
   function open() {
-    const ws = new WebSocket(url);
+    let ws: WebSocket;
+    try {
+      ws = new WebSocket(url);
+    } catch {
+      // The constructor rejects an invalid URL at once, and a retry fails the same way.
+      badUrls.add(name);
+      return;
+    }
     let gotHello = false;
 
     ws.onopen = () => {
@@ -57,11 +82,13 @@ export function connectEndpoint(name: string, url: string, cb: Callbacks): void 
         }
         gotHello = true;
         if (hello.schema !== 1) {
-          schemaMismatch = true;
-          cb.onSchemaMismatch(name, hello.schema);
+          // Keep retrying at the slowest rate: the endpoint may restart with schema 1.
+          backoff = BACKOFF_MAX_MS;
+          rejected.set(name, hello.schema);
           ws.close();
           return;
         }
+        rejected.delete(name);
         cb.onHello(name, hello);
         return;
       }
@@ -71,7 +98,6 @@ export function connectEndpoint(name: string, url: string, cb: Callbacks): void 
 
     ws.onclose = () => {
       cb.onClose(name);
-      if (schemaMismatch) return; // permanent: server speaks a different schema version
       setTimeout(open, backoff);
       backoff = Math.min(backoff * 2, BACKOFF_MAX_MS);
     };

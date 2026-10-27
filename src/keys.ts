@@ -1,4 +1,4 @@
-// Operator keys (design section 7). Keyboard only, no on-screen buttons.
+// Operator keys (design section 7). The camera PiP also has buttons (pip.ts).
 export type KeyAction = "pip" | "theme" | "fullscreen" | "chase" | "high" | "reset";
 
 const ACTIONS: Record<string, KeyAction> = {
