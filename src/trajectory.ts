@@ -1,9 +1,12 @@
 import * as THREE from "three";
 import { toScene } from "./frames";
-import { palette, setTransparent, STACK_LOST_FADE_S, STACK_LOST_OPACITY } from "./style";
+import { palette, STACK_LOST_FADE_S } from "./style";
 
 const DEFAULT_WIDTH_M = 1.9; // ego vehicle width fallback (design §5.2)
 const TRAJ_Y = 0.03; // just above road surface
+// See-through ribbon and its Stack lost ghost (design §6.5, mockups 01 and 03).
+const OPACITY = 0.4;
+const GHOST_OPACITY = 0.08;
 
 export class TrajectoryRibbon {
   private scene: THREE.Scene;
@@ -22,6 +25,8 @@ export class TrajectoryRibbon {
       color: palette.traj,
       side: THREE.DoubleSide,
       depthWrite: false,
+      transparent: true,
+      opacity: OPACITY,
     });
   }
 
@@ -29,10 +34,9 @@ export class TrajectoryRibbon {
     this.rawPts = pts;
     this.rawWidthM = widthM ?? DEFAULT_WIDTH_M;
     this.frame = frame;
-    // Restore full opacity after a stackLost ghost.
+    // Restore the opacity after a stackLost ghost.
     this.lost = false;
-    setTransparent(this.mat, false);
-    this.mat.opacity = 1;
+    this.mat.opacity = OPACITY;
   }
 
   // An ego-frame ribbon moves with ego. A map-frame ribbon and a lost stack's ghost stay put.
@@ -50,9 +54,9 @@ export class TrajectoryRibbon {
   }
 
   tick(dt: number): void {
-    if (this.lost && this.mat.opacity > STACK_LOST_OPACITY) {
-      setTransparent(this.mat, true);
-      this.mat.opacity = Math.max(STACK_LOST_OPACITY, this.mat.opacity - dt / STACK_LOST_FADE_S);
+    if (this.lost && this.mat.opacity > GHOST_OPACITY) {
+      const step = ((OPACITY - GHOST_OPACITY) * dt) / STACK_LOST_FADE_S;
+      this.mat.opacity = Math.max(GHOST_OPACITY, this.mat.opacity - step);
     }
   }
 

@@ -15,23 +15,11 @@ export type HudData = {
 // Full-scale for the pedal bar (design §6.4, to be tuned in W5 on the booth monitor).
 const ACCEL_FULL_SCALE = 3; // m/s²
 
+// steer_rad is the road wheel angle. The icon is a steering wheel, which turns
+// about this many times more (a typical car's steering ratio).
+const STEERING_RATIO = 15;
+
 const fmtInt = (n: number) => Math.round(n).toString();
-
-// The bottom-left panel is laid out for a 1080 px tall viewport and scales with
-// the viewport height (design §6.1).
-const DESIGN_HEIGHT_PX = 1080;
-
-export function viewportScale(viewportHeight: number): number {
-  return viewportHeight / DESIGN_HEIGHT_PX;
-}
-
-// zoom, unlike transform: scale(), also scales the layout box, so the panel and
-// the status line under it keep their spacing at every size.
-export function scaleWithViewport(el: HTMLElement): void {
-  const fit = () => el.style.setProperty("zoom", String(viewportScale(window.innerHeight)));
-  fit();
-  window.addEventListener("resize", fit);
-}
 
 export class Hud {
   private panel = document.getElementById("hud") as HTMLElement;
@@ -79,8 +67,7 @@ export class Hud {
       this.leadRow.hidden = true;
     }
 
-    const deg = (d.steeringRad * 180) / Math.PI;
-    (this.wheelEl as HTMLElement).style.transform = `rotate(${-deg}deg)`;
+    this.wheelEl.style.transform = `rotate(${wheelIconDeg(d.steeringRad)}deg)`;
 
     const pct = Math.min(1, Math.abs(d.accelMps2) / ACCEL_FULL_SCALE) * 100;
     if (d.accelMps2 >= 0) {
@@ -93,4 +80,10 @@ export class Hud {
 
     this.statusEl.textContent = d.statusLine;
   }
+}
+
+// CSS rotate() angle of the wheel icon: clockwise positive, so a left turn
+// (positive steer_rad) turns it counterclockwise.
+export function wheelIconDeg(steerRad: number): number {
+  return (-steerRad * STEERING_RATIO * 180) / Math.PI;
 }
