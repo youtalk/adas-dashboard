@@ -58,9 +58,9 @@ Four roles feed the page. Each role is a WebSocket endpoint that sends JSON text
 | `map`        | static lane geometry                       | CARLA OpenDRIVE, Lanelet2, an HD map                               |
 | `supervisor` | who controls the car and why               | Safety Island on the Cortex-R52, Autoware MRM, a driver takeover   |
 
-One endpoint can carry more than one role. The `hello` message lists the roles that an endpoint carries. In the CES setup, the VisionPilot process on the board serves `stack`. One Python process on the CARLA host serves `vehicle`, `map` and `supervisor`.
+One endpoint can carry more than one role. The `hello` message lists the roles that an endpoint carries. In the CES setup, the VisionPilot process on the board serves `stack`. On the CARLA host, one Python process serves `vehicle` and `map` on the `world` endpoint, and a second one serves `supervisor` on the `supervisor` endpoint. Each has one dependency, the CARLA client or ROS 2, and one can fail while the other keeps running.
 
-The page reads `config.json` next to `index.html`. The page URL overrides it key by key (section 7), for example `index.html?stack=ws://192.168.0.20:8090/stack&world=ws://192.168.0.1:8091/world`. Endpoint names in the URL and in `config.json` are free. The page connects to all of them and learns the roles from `hello`.
+The page reads `config.json` next to `index.html`. The page URL overrides it key by key (section 7), for example `index.html?stack=ws://192.168.0.20:8090/stack&world=ws://127.0.0.1:8091/world`. Endpoint names in the URL and in `config.json` are free. The page connects to all of them and learns the roles from `hello`.
 
 ## 5. Message schema
 
@@ -310,7 +310,7 @@ This adapter is a future task in `adapters/autoware/`, not part of the CES 2027 
 
 ![Driving state](mockups/01-driving.png)
 
-The scene fills the page at any aspect ratio. The booth monitor is 1920 by 1080. The status panel (bottom left) is about 480 by 340 px at that size. The camera picture-in-picture (top right) is about 460 by 260 px. It is an `<iframe>` of the raw camera stream URL given in the configuration. The page draws nothing on top of the camera image. The `c` key minimizes it to an 80 px pill. These sizes are CSS px, so browser zoom (Ctrl + and Ctrl −) makes the status panel, the camera picture-in-picture and the pill larger or smaller on each screen. The browser keeps the zoom for the site. The scene does not change with the zoom.
+The scene fills the page at any aspect ratio. The booth monitor is 1920 by 1080. The status panel (bottom left) is about 480 by 340 px at that size. The camera picture-in-picture (top right) is about 460 by 260 px. It is an `<iframe>` of the raw camera stream URL given in the configuration. The page draws nothing on top of the camera image except the close button. The `c` key or the close button at its top right corner minimizes it to an 80 px camera button, and a click on that button restores it. These sizes are CSS px, so browser zoom (Ctrl + and Ctrl −) makes the status panel, the camera picture-in-picture and the pill larger or smaller on each screen. The browser keeps the zoom for the site. The scene does not change with the zoom.
 
 ### 6.2 Layers
 
@@ -355,7 +355,7 @@ Text in the scene uses a system sans-serif font. The pill text is 40 px at brows
 
 ## 7. Operator controls and configuration
 
-Keyboard only, no on-screen buttons:
+Keyboard, plus the two camera buttons of section 6.1:
 
 | Key | Action                                      |
 | --- | ------------------------------------------- |
@@ -370,8 +370,12 @@ Keyboard only, no on-screen buttons:
 
 ```json
 {
-  "endpoints": { "stack": "ws://192.168.0.20:8090/stack", "world": "ws://192.168.0.1:8091/world" },
-  "camera_url": "http://192.168.0.20:8080/",
+  "endpoints": {
+    "stack": "ws://192.168.0.20:8090/stack",
+    "world": "ws://127.0.0.1:8091/world",
+    "supervisor": "ws://127.0.0.1:8092/supervisor"
+  },
+  "camera_url": "data:text/html,<body style='margin:0;overflow:hidden;background:black'><img src='http://127.0.0.1:8080/stream?topic=/carla/hero/main_cam/image&type=mjpeg&quality=80&width=640&height=360' onerror='setTimeout(()=>{this.src=this.src},1000)' style='width:100%25;height:100%25;object-fit:cover'>",
   "units": "mph",
   "theme": "dark",
   "camera": {
@@ -385,10 +389,14 @@ URL query parameters override `config.json` key by key.
 
 Both camera presets use a 45° vertical field of view.
 
+On the bench, `camera_url` is a one-line `data:` page that stretches the MJPEG stream of `web_video_server` (section 15) over the whole PiP. A plain stream URL would show the image at its own size inside the `<iframe>`, with a margin and scroll bars.
+
+The page loads the `<iframe>` once. If the stream is not up yet, the image fails, so its `onerror` asks for the stream again after 1 s. Without it, a page opened before `web_video_server` keeps a broken image until someone reloads it (board 2, 2026-10-20).
+
 ## 8. Frontend stack and repository layout
 
 - Vite, TypeScript, three.js. No UI framework, no CSS framework. Node 22 LTS.
-- `npm run build` produces `dist/`, a static folder that any HTTP server can serve. `npm run dev` serves it with hot reload. `python3 -m http.server -d dist` is enough on the booth.
+- `npm run build` produces `dist/`, a static folder that any HTTP server can serve. `npm run dev` serves it with hot reload. `python3 -m http.server 8070 -d dist` is enough on the booth. Do not use the default port 8000 on the CARLA host: the CARLA Traffic Manager binds it, and the bridge then fails at start (2026-10-20).
 - Tests with Vitest: the state machine (section 6.3) and the frame transforms (`map` to `ego`). One replay smoke test that loads a recording and makes sure that all six states are reached. No end-to-end browser tests are required.
 - Lint and format with the repository's `pre-commit` configuration: prettier, markdownlint-cli2, ruff, ruff-format, and the generic pre-commit hooks. ESLint and cspell arrive in W1, because the frontend code will then exist for cspell's word list and for ESLint to lint. CI runs build, tests and pre-commit on every pull request.
 
@@ -457,15 +465,15 @@ If all of these hold, the work is complete:
 2. The recorded kill run replays through Connecting, Driving, Alert, Stack lost, Takeover and Stopped with the appearance in section 6, in both themes.
 3. The live bench run in W5 shows the same with VisionPilot on the board and CARLA on the host. It runs at 60 fps at 1080p while CARLA renders on the same GPU.
 4. Every endpoint's messages pass the JSON Schema in `schema/v1/`.
-5. The page runs from `python3 -m http.server -d dist` with `config.json` only.
+5. The page runs from `python3 -m http.server 8070 -d dist` with `config.json` only.
 6. Every commit is signed off (DCO) and the repository contains no text in a language other than English.
 
 ## 15. Appendix: the CES 2027 adapters
 
 For reference, not for MultiCoreWare to build.
 
-VisionPilot (`stack`): a WebSocket server in the VisionPilot process, next to the existing WebRTC stream in `modules/visualization/`, reusing Boost.Beast and nlohmann/json that are already linked. The existing `occupancy_bridge.cpp` conversion (pixels to ego frame through the homography, lane samples, path coefficients, CIPO) becomes the JSON producer. The trajectory is the path polynomial sampled every meter to 150 m. `class` is `car`, `suv` or `truck` from the same width heuristic the Occupancy view uses today. `alerts` come from `Plan::warnings` (`FCW`, `AEB`, `LLDW`, `RLDW`). `status.stages` come from the per-frame latency fields. A configuration flag makes the WebRTC stream send the raw resized camera image instead of the HUD image. The PiP then shows the camera and nothing else.
+VisionPilot (`stack`): a WebSocket server in the VisionPilot process, next to the existing WebRTC stream in `modules/visualization/`, reusing Boost.Beast and nlohmann/json that are already linked. It sends `objects`, `trajectory`, `alerts` and `status`. VisionPilot perceives no lane lines, only its planned path, so it sends no `lanes`. It does not know who controls the car, so it sends no `control`. AutoSpeed boxes go to the ground through the homography with the Occupancy view's rule. `class` is `car` or `truck` from the same width heuristic, and a nearest-neighbor tracker gives each box a stable `id`. The trajectory is the path polynomial sampled every meter to 150 m, with an empty `pts` for a frame whose fit failed. `alerts` come from `Plan::warnings`. `FCW` and `AEB` are `critical` with target `lead`. `LLDW` and `RLDW` are `info` with target `trajectory`, because lateral oscillation on the bench would otherwise keep the page in Alert. `status.stages` come from the per-frame latency fields. VisionPilot has no flag yet that streams the camera without its HUD. A vehicle without CARLA needs one for the PiP.
 
-CARLA (`vehicle`, `map`): a Python client on the CARLA host. It reads the ego actor's transform and velocity and the OpenDRIVE map. It sends `ego` at 20 Hz and `map` with the lane boundaries around the ego.
+CARLA (`vehicle`, `map`): a Python client on the CARLA host that never ticks the world. It reads the ego actor's transform, velocity and acceleration once per simulation step, so `ego` goes out at the simulation rate of 10 Hz. It builds the lane boundaries from the OpenDRIVE map once and sends the part within 200 m of the ego. The camera PiP on the bench shows CARLA's own camera topic, `/carla/hero/main_cam/image`, as an MJPEG stream from `web_video_server` in a container on the CARLA host (`adapters/carla/camera/`). The board's VisionPilot then encodes no video, so its 80 ms frame deadline under the S-CORE launch manager is not affected.
 
-Safety Island (`supervisor`): a ROS 2 node on the CARLA host on DDS domain 2. It watches the CR52's `control_cmd` and the bridge's source switch. It sends `control`, `status` and `alerts`. The `hello.name` is `Safety Island`, `device` is `Cortex-R52`.
+Safety Island (`supervisor`): a ROS 2 node on the CARLA host on DDS domain 1. Domain 2 exists only inside the board and cannot be observed from outside. The node watches `/control/trajectory_follower/control_cmd`, which carries the Cortex-R52 command after the board's bridge, and applies the arbiter's rule: the Safety Island has control while its last command is at most 0.5 s old. It sends `control`, `status` and `alerts`, and it is the only source of `control`. The `hello.name` is `Safety Island`, `device` is `Cortex-R52`.
