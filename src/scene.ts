@@ -13,6 +13,9 @@ export function createScene(container: HTMLElement) {
   camera.lookAt(0, 0, 5);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  // Draw at the screen's own pixels: browser zoom raises devicePixelRatio, and
+  // without this the scene would be drawn smaller and stretched.
+  renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = true;
   container.appendChild(renderer.domElement);
@@ -57,6 +60,7 @@ export function createScene(container: HTMLElement) {
   window.addEventListener("resize", () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
+    renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
