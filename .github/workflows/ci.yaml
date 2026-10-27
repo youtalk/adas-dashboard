@@ -21,7 +21,7 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install -r tools/requirements.txt
-      - run: pytest tools -q
+      - run: pytest tools adapters -q
       - run: python3 -m tools.synth /tmp/out && diff -r /tmp/out recordings/ces2027-kill-route
   lint:
     runs-on: ubuntu-latest

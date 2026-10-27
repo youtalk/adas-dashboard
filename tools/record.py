@@ -21,7 +21,8 @@ async def record(name: str, url: str, out: pathlib.Path, seconds: float | None) 
     loop = asyncio.get_running_loop()
     deadline = None if seconds is None else loop.time() + seconds
     with (out / f"{name}.jsonl").open("w") as f:
-        async with websockets.connect(url) as ws:
+        # No keepalive pings: the VisionPilot stack endpoint never reads, so it answers none.
+        async with websockets.connect(url, ping_interval=None) as ws:
             while deadline is None or loop.time() < deadline:
                 timeout = None if deadline is None else max(0.0, deadline - loop.time())
                 try:
