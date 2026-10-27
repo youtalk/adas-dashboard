@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { fetchConfig } from "./config";
-import { connectEndpoint, connectionStatus, rejected } from "./ws";
+import { badUrls, connectEndpoint, connectionStatus, rejected } from "./ws";
 import { isWellFormed } from "./messages";
 import {
   setRoles,
@@ -56,7 +56,9 @@ let configError: string | null = null;
 
 // Bottom-left line (design section 6.3).
 function statusText(state: PageState): string {
-  return configError ?? connectionStatus(rejected, state === "connecting", roleLost("vehicle"));
+  return (
+    configError ?? connectionStatus(rejected, badUrls, state === "connecting", roleLost("vehicle"))
+  );
 }
 
 // "<name> · <latency_ms> ms · <device>" (design section 6.4).
