@@ -55,3 +55,54 @@ def test_objects_msg_classes_sizes_and_lead():
 def test_objects_msg_unknown_label_is_a_box():
     m = convert.objects_msg(1.0, [obj(label=42)], {}, None)
     assert m["objects"][0]["class"] == "unknown"
+
+
+def straight(n=101):
+    return [(float(i), 0.0) for i in range(n)]  # 100 m along +x, 1 m apart
+
+
+def test_trajectory_msg_downsamples_and_keeps_the_end():
+    m = convert.trajectory_msg(1.0, [(i * 0.1, 0.0) for i in range(1000)], 1.9)
+    schema.validate(m)
+    assert m["frame"] == "map" and m["width_m"] == 1.9
+    assert len(m["pts"]) <= convert.TRAJ_MAX_PTS
+    assert m["pts"][0] == [0.0, 0.0] and m["pts"][-1] == [99.9, 0.0]
+
+
+def test_trajectory_msg_accepts_an_empty_plan():
+    m = convert.trajectory_msg(1.0, [], 1.9)
+    schema.validate(m)
+    assert m["pts"] == []
+
+
+def test_lead_is_the_nearest_object_in_the_path():
+    objs = [
+        obj(b"far", x=50.0),
+        obj(b"near", x=30.0, y=0.3),
+        obj(b"side", x=20.0, y=3.5),
+        obj(b"back", x=-10.0),
+    ]
+    idx, dist = convert.lead(objs, straight(), 0.95)
+    assert idx == 1 and math.isclose(dist, 30.0)
+
+
+def test_lead_measures_along_a_curve():
+    r = 20.0
+    arc = [
+        (r * math.sin(a / 100), r - r * math.cos(a / 100)) for a in range(158)
+    ]  # a quarter circle
+    on_arc = obj(x=r * math.sin(1.0), y=r - r * math.cos(1.0))
+    idx, dist = convert.lead([on_arc], arc, 0.95)
+    assert idx == 0 and abs(dist - r * 1.0) < 0.1
+
+
+def test_lead_none_without_path_or_objects():
+    assert convert.lead([obj()], [], 0.95) is None
+    assert convert.lead([obj()], [(0.0, 0.0)], 0.95) is None
+    assert convert.lead([], straight(), 0.95) is None
+
+
+def test_lead_survives_repeated_points():
+    path = [(0.0, 0.0), (0.0, 0.0), (10.0, 0.0), (10.0, 0.0), (20.0, 0.0)]
+    idx, dist = convert.lead([obj(x=15.0)], path, 0.95)
+    assert idx == 0 and math.isclose(dist, 15.0)

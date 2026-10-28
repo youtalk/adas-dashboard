@@ -9,6 +9,8 @@ from typing import NamedTuple
 
 SOURCE = "autoware"
 MIN_SIZE_M = 0.1  # the schema needs sizes above 0. A polygon shape has no box dimensions.
+TRAJ_MAX_PTS = 150
+LEAD_MARGIN_M = 0.5  # how far outside the trajectory ribbon an object still counts as lead
 # autoware_perception_msgs/ObjectClassification labels
 CLASSES = {
     0: "unknown",
@@ -98,3 +100,52 @@ def objects_msg(
             d["distance_m"] = round(lead[1], 1)
         out.append(d)
     return {**_envelope("objects", t_ms), "frame": "map", "objects": out}
+
+
+def trajectory_msg(t_ms: float, pts: list[tuple[float, float]], width_m: float) -> dict:
+    """At most TRAJ_MAX_PTS points: every k-th point, and always the last one."""
+    k = max(1, math.ceil(len(pts) / (TRAJ_MAX_PTS - 1)))
+    kept = pts[::k]
+    if pts and (len(pts) - 1) % k:
+        kept.append(pts[-1])
+    return {
+        **_envelope("trajectory", t_ms),
+        "frame": "map",
+        "width_m": round(width_m, 2),
+        "pts": [[round(x, 2), round(y, 2)] for x, y in kept],
+    }
+
+
+def _project(p: tuple[float, float], path: list[tuple[float, float]]) -> tuple[float, float]:
+    """(lateral distance, arc length) of the point on path nearest to p."""
+    best, s0 = (math.inf, 0.0), 0.0
+    for a, b in zip(path, path[1:], strict=False):
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        seg = math.hypot(dx, dy)
+        if seg == 0.0:
+            continue
+        t = min(max(((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (seg * seg), 0.0), 1.0)
+        d = math.dist(p, (a[0] + t * dx, a[1] + t * dy))
+        if d < best[0]:
+            best = (d, s0 + t * seg)
+        s0 += seg
+    return best
+
+
+def lead(
+    objs: list[Obj],
+    path: list[tuple[float, float]],
+    half_width_m: float,
+    margin_m: float = LEAD_MARGIN_M,
+) -> tuple[int, float] | None:
+    """Index and arc distance of the nearest object ahead within the trajectory ribbon.
+
+    The trajectory starts at the ego, so the arc length from its first point is the distance.
+    """
+    # ponytail: every object against every segment, about 150 x 100 per frame at 20 Hz.
+    found = None
+    for i, o in enumerate(objs):
+        d, arc = _project((o.x, o.y), path)
+        if d <= half_width_m + margin_m and arc > 0.0 and (found is None or arc < found[1]):
+            found = (i, arc)
+    return found
