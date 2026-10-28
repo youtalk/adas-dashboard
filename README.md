@@ -1,6 +1,6 @@
 # ADAS dashboard
 
-A browser page that shows what an automated driving stack sees, plans and does, for people who are not engineers. It takes a small set of JSON messages over WebSocket from four roles: the driving stack, the vehicle, the map, and a supervisor that can take control. Adapters exist for VisionPilot, CARLA and the Safety Island used in the Autoware Foundation CES 2027 demo. Any other stack, vehicle or map can feed it through the same messages.
+A browser page that shows what an automated driving stack sees, plans and does, for people who are not engineers. It takes a small set of JSON messages over WebSocket from four roles: the driving stack, the vehicle, the map, and a supervisor that can take control. Adapters exist for VisionPilot, CARLA, the Safety Island used in the Autoware Foundation CES 2027 demo, and Autoware. Any other stack, vehicle or map can feed it through the same messages.
 
 The design, message schema, screen states and weekly milestones are in [docs/design.md](docs/design.md).
 

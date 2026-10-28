@@ -1,4 +1,4 @@
-# Camera PiP source: MJPEG of the CARLA camera topic (design section 15). Build:
+# Camera PiP source: MJPEG of a camera topic, raw or compressed (design section 15). Build:
 #   docker build -t adas-dashboard-camera adapters/carla/camera
 FROM ros:jazzy-ros-base
 RUN apt-get update && apt-get install -y --no-install-recommends \
