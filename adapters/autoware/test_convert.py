@@ -112,6 +112,12 @@ def test_lead_just_past_a_plan_that_stops_behind_it():
     assert convert.lead([obj(x=26.0, y=3.5)], straight(21), 0.95) is None
 
 
+def test_lead_past_the_plan_end_only_heads_our_way():
+    # Stopped at a stop line, a car that crosses the junction just ahead is not a lead.
+    crossing = convert.Obj(b"x", 1, 28.0, 0.5, math.pi / 2, 4.5, 1.9, 1.5)
+    assert convert.lead([crossing], straight(21), 0.95) is None
+
+
 def test_lead_not_past_a_plan_too_short_to_point_anywhere():
     # A stopped learned planner puts every point at the ego. Its tiny jitter has no direction.
     jitter = [(0.0, 0.0), (0.001, 0.0005), (0.002, 0.001)]

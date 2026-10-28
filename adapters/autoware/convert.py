@@ -18,6 +18,7 @@ LEAD_MARGIN_M = 0.5  # how far outside the trajectory ribbon an object still cou
 # overhang and half the car length put the car's center about 11 m past the plan's end.
 LEAD_BEYOND_M = 15.0
 LEAD_HEADING_M = 1.0  # the extension needs a plan this long to have a direction
+LEAD_ALIGN_COS = 0.5  # past the plan's end, only objects heading within 60 degrees of it count
 # autoware_adapi_v1_msgs OperationModeState.mode, MrmState.state and MrmState.behavior
 STOP, AUTONOMOUS, LOCAL, REMOTE = 1, 2, 3, 4
 MRM_OPERATING, MRM_SUCCEEDED, MRM_FAILED = 2, 3, 4
@@ -145,9 +146,11 @@ def ahead(path: list[tuple[float, float]], x: float, y: float) -> list[tuple[flo
     return path[min(range(len(path)), key=lambda i: math.dist(path[i], (x, y))) :]
 
 
-def _project(p: tuple[float, float], path: list[tuple[float, float]]) -> tuple[float, float]:
+def _project(
+    p: tuple[float, float], path: list[tuple[float, float]], yaw: float
+) -> tuple[float, float]:
     """(lateral distance, arc length) of the point nearest to p on path, which continues
-    straight for LEAD_BEYOND_M past its last point."""
+    straight for LEAD_BEYOND_M past its last point for an object whose yaw heads the same way."""
     best, s0 = (math.inf, 0.0), 0.0
     for a, b in zip(path, path[1:], strict=False):
         dx, dy = b[0] - a[0], b[1] - a[1]
@@ -166,6 +169,8 @@ def _project(p: tuple[float, float], path: list[tuple[float, float]]) -> tuple[f
     if base is not None:
         dx, dy = end[0] - base[0], end[1] - base[1]
         n = math.hypot(dx, dy)
+        if (math.cos(yaw) * dx + math.sin(yaw) * dy) / n < LEAD_ALIGN_COS:
+            return best  # a car crossing or coming the other way past the end is no lead
         along = min(max(((p[0] - end[0]) * dx + (p[1] - end[1]) * dy) / n, 0.0), LEAD_BEYOND_M)
         d = math.dist(p, (end[0] + along * dx / n, end[1] + along * dy / n))
         if d < best[0]:
@@ -186,7 +191,7 @@ def lead(
     # ponytail: every object against every segment, about 150 x 100 per frame at 20 Hz.
     found = None
     for i, o in enumerate(objs):
-        d, arc = _project((o.x, o.y), path)
+        d, arc = _project((o.x, o.y), path, o.yaw)
         if d <= half_width_m + margin_m and arc > 0.0 and (found is None or arc < found[1]):
             found = (i, arc)
     return found
