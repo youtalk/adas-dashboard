@@ -104,6 +104,14 @@ def test_lead_measures_along_a_curve():
     assert idx == 0 and abs(dist - r * 1.0) < 0.1
 
 
+def test_lead_just_past_a_plan_that_stops_behind_it():
+    # Autoware ends its plan at the stop point, several meters behind the car it stops for.
+    idx, dist = convert.lead([obj(x=31.0)], straight(21), 0.95)
+    assert idx == 0 and math.isclose(dist, 31.0)
+    assert convert.lead([obj(x=20.0 + convert.LEAD_BEYOND_M + 2.0)], straight(21), 0.95) is None
+    assert convert.lead([obj(x=26.0, y=3.5)], straight(21), 0.95) is None
+
+
 def test_lead_none_without_path_or_objects():
     assert convert.lead([obj()], [], 0.95) is None
     assert convert.lead([obj()], [(0.0, 0.0)], 0.95) is None
