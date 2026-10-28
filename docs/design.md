@@ -290,7 +290,7 @@ The schema must serve stacks beyond the CES demo. That range goes from a camera-
 - Schema 1 reserves `predicted_paths`, `behavior`, `stop`, the map kinds `crosswalk`, `stop_line` and `traffic_light`, the `remote` authority, and the `signals` type. An L4 adapter can send them today. The page will draw them once the frontend supports them.
 - The page ignores an unknown `type`, but the tools do not. `tools/schema.py` validates every message against the nine schema files in `schema/v1/`. It rejects a `type` that has no file, and `replay.py` and `record.py` reject it with it. To add a tenth type, add its schema file in the same commit.
 
-An Autoware stack maps onto the roles through the AD API, so the adapter does not depend on internal topics:
+An Autoware stack maps onto the roles as below. The table names the public AD API source of each role:
 
 | Role         | Type               | AD API source                                                                                                           |
 | ------------ | ------------------ | ----------------------------------------------------------------------------------------------------------------------- |
@@ -302,7 +302,7 @@ An Autoware stack maps onto the roles through the AD API, so the adapter does no
 | `supervisor` | `control`          | `/api/operation_mode/state`: `autonomous` is `stack`, `local` is `driver`, `remote` is `remote`, an MRM is `supervisor` |
 | `signals`    | reserved           | `/api/perception/traffic_signals`                                                                                       |
 
-The adapter is in `adapters/autoware/`. It reads the internal topics behind most of these AD API sources, so that a recorded drive plays back without a running AD API. Its README lists each topic.
+The adapter is in `adapters/autoware/`. By default it reads the internal topic behind most of these AD API sources, so that a recorded drive plays back without a running AD API. Every topic is an option, and the adapter README lists each one.
 
 ## 6. Screen design
 
