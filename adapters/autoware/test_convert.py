@@ -165,3 +165,52 @@ def test_parse_osm_needs_local_coordinates():
 def test_map_msg_is_valid():
     features, _ = convert.parse_osm(OSM)
     schema.validate(convert.map_msg(1.0, features))
+
+
+@pytest.mark.parametrize(
+    "mode, enabled, mrm, expected",
+    [
+        (convert.AUTONOMOUS, True, 1, "stack"),
+        (convert.STOP, False, 1, "stack"),  # before engage and after ARRIVED
+        (convert.AUTONOMOUS, False, 1, "driver"),  # the driver took the wheel
+        (convert.LOCAL, True, 1, "driver"),
+        (convert.REMOTE, True, 1, "remote"),
+        (convert.AUTONOMOUS, True, convert.MRM_OPERATING, "supervisor"),
+        (convert.STOP, True, convert.MRM_SUCCEEDED, "supervisor"),
+    ],
+)
+def test_authority(mode, enabled, mrm, expected):
+    assert convert.authority(mode, enabled, mrm) == expected
+
+
+def test_stack_status_active_only_in_autonomous():
+    on = convert.stack_status(
+        1.0, "Autoware Universe (rule-based)", "RTX 5090", convert.AUTONOMOUS, 8.333
+    )
+    off = convert.stack_status(
+        1.0, "Autoware Universe (rule-based)", "RTX 5090", convert.STOP, None
+    )
+    for m in (on, off):
+        schema.validate(m)
+        assert "latency_ms" not in m
+    assert (on["mode"], on["speed_limit_mps"]) == ("active", 8.33)
+    assert off["mode"] == "standby" and "speed_limit_mps" not in off
+
+
+def test_mrm_alert_and_clear():
+    m = convert.mrm_alerts(1.0, convert.MRM_OPERATING, convert.EMERGENCY_STOP)
+    schema.validate(m)
+    assert m["alerts"] == [
+        {"code": "MRM", "severity": "critical", "text": "Autoware MRM: emergency stop"}
+    ]
+    assert convert.mrm_alerts(1.0, 1, 1)["alerts"] == []
+
+
+def test_hello_control_and_supervisor_status_are_valid():
+    for m in (
+        convert.hello(0.0, ["vehicle", "map"], "Autoware Universe (rule-based)", "RTX 5090"),
+        convert.control_msg(1.0, "stack"),
+        convert.supervisor_status(1.0, convert.MRM_OPERATING),
+    ):
+        schema.validate(m)
+    assert convert.supervisor_status(1.0, 1)["mode"] == "standby"

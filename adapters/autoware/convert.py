@@ -14,6 +14,16 @@ SOURCE = "autoware"
 MIN_SIZE_M = 0.1  # the schema needs sizes above 0. A polygon shape has no box dimensions.
 TRAJ_MAX_PTS = 150
 LEAD_MARGIN_M = 0.5  # how far outside the trajectory ribbon an object still counts as lead
+# autoware_adapi_v1_msgs OperationModeState.mode, MrmState.state and MrmState.behavior
+STOP, AUTONOMOUS, LOCAL, REMOTE = 1, 2, 3, 4
+MRM_OPERATING, MRM_SUCCEEDED, MRM_FAILED = 2, 3, 4
+EMERGENCY_STOP, COMFORTABLE_STOP, PULL_OVER = 2, 3, 4
+MRM_TEXT = {
+    EMERGENCY_STOP: "Autoware MRM: emergency stop",
+    COMFORTABLE_STOP: "Autoware MRM: comfortable stop",
+    PULL_OVER: "Autoware MRM: pulling over",
+}
+SUPERVISOR_NAME = "Autoware MRM"
 # autoware_perception_msgs/ObjectClassification labels
 CLASSES = {
     0: "unknown",
@@ -226,3 +236,54 @@ def speed_limit_at(lanelets: list[Lanelet], x: float, y: float) -> float | None:
 
 def map_msg(t_ms: float, features: list[dict]) -> dict:
     return {**_envelope("map", t_ms), "frame": "map", "range_m": MAP_RANGE_M, "features": features}
+
+
+def _in_mrm(mrm_state: int) -> bool:
+    return mrm_state in (MRM_OPERATING, MRM_SUCCEEDED, MRM_FAILED)
+
+
+def hello(t_ms: float, roles: list[str], name: str, device: str) -> dict:
+    m = {**_envelope("hello", t_ms), "schema": 1, "roles": roles, "name": name}
+    return {**m, "device": device} if device else m
+
+
+def authority(mode: int, control_enabled: bool, mrm_state: int) -> str:
+    """Who drives. STOP is `stack`: Autoware holds the car before engage and after arrival."""
+    if _in_mrm(mrm_state):
+        return "supervisor"
+    if mode == LOCAL or (mode == AUTONOMOUS and not control_enabled):
+        return "driver"
+    return "remote" if mode == REMOTE else "stack"
+
+
+def stack_status(
+    t_ms: float, name: str, device: str, mode: int, speed_limit_mps: float | None
+) -> dict:
+    m = {
+        **_envelope("status", t_ms),
+        "name": name,
+        "mode": "active" if mode == AUTONOMOUS else "standby",
+    }
+    if device:
+        m["device"] = device
+    if speed_limit_mps is not None:
+        m["speed_limit_mps"] = round(speed_limit_mps, 2)
+    return m
+
+
+def control_msg(t_ms: float, auth: str) -> dict:
+    return {**_envelope("control", t_ms), "authority": auth}
+
+
+def supervisor_status(t_ms: float, mrm_state: int) -> dict:
+    mode = "active" if _in_mrm(mrm_state) else "standby"
+    return {**_envelope("status", t_ms), "name": SUPERVISOR_NAME, "mode": mode}
+
+
+def mrm_alerts(t_ms: float, mrm_state: int, behavior: int) -> dict:
+    alert = {
+        "code": "MRM",
+        "severity": "critical",
+        "text": MRM_TEXT.get(behavior, "Autoware MRM: stopping"),
+    }
+    return {**_envelope("alerts", t_ms), "alerts": [alert] if _in_mrm(mrm_state) else []}
