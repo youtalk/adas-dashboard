@@ -302,7 +302,7 @@ An Autoware stack maps onto the roles through the AD API, so the adapter does no
 | `supervisor` | `control`          | `/api/operation_mode/state`: `autonomous` is `stack`, `local` is `driver`, `remote` is `remote`, an MRM is `supervisor` |
 | `signals`    | reserved           | `/api/perception/traffic_signals`                                                                                       |
 
-This adapter is a future task in `adapters/autoware/`, not part of the CES 2027 milestones.
+The adapter is in `adapters/autoware/`. It reads the internal topics behind most of these AD API sources, so that a recorded drive plays back without a running AD API. Its README lists each topic.
 
 ## 6. Screen design
 

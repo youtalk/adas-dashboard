@@ -134,6 +134,13 @@ def trajectory_msg(t_ms: float, pts: list[tuple[float, float]], width_m: float) 
     }
 
 
+def ahead(path: list[tuple[float, float]], x: float, y: float) -> list[tuple[float, float]]:
+    """The path from its point nearest to the ego. Autoware's plan starts a few meters behind."""
+    if not path:
+        return []
+    return path[min(range(len(path)), key=lambda i: math.dist(path[i], (x, y))) :]
+
+
 def _project(p: tuple[float, float], path: list[tuple[float, float]]) -> tuple[float, float]:
     """(lateral distance, arc length) of the point on path nearest to p."""
     best, s0 = (math.inf, 0.0), 0.0
@@ -158,7 +165,7 @@ def lead(
 ) -> tuple[int, float] | None:
     """Index and arc distance of the nearest object ahead within the trajectory ribbon.
 
-    The trajectory starts at the ego, so the arc length from its first point is the distance.
+    path starts at the ego (see `ahead`), so the arc length from its first point is the distance.
     """
     # ponytail: every object against every segment, about 150 x 100 per frame at 20 Hz.
     found = None

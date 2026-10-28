@@ -77,6 +77,12 @@ def test_trajectory_msg_accepts_an_empty_plan():
     assert m["pts"] == []
 
 
+def test_ahead_starts_at_the_point_nearest_the_ego():
+    path = [(float(i), 0.0) for i in range(-5, 11)]  # Autoware keeps 5 m behind the ego
+    assert convert.ahead(path, 0.2, 0.1) == path[5:]
+    assert convert.ahead([], 0.0, 0.0) == []
+
+
 def test_lead_is_the_nearest_object_in_the_path():
     objs = [
         obj(b"far", x=50.0),
