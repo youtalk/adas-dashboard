@@ -2,6 +2,8 @@
 
 import math
 
+import pytest
+
 from adapters.autoware import convert
 from tools import schema
 
@@ -106,3 +108,60 @@ def test_lead_survives_repeated_points():
     path = [(0.0, 0.0), (0.0, 0.0), (10.0, 0.0), (10.0, 0.0), (20.0, 0.0)]
     idx, dist = convert.lead([obj(x=15.0)], path, 0.95)
     assert idx == 0 and math.isclose(dist, 15.0)
+
+
+OSM = """<osm>
+  <node id="1"><tag k="local_x" v="0"/><tag k="local_y" v="0"/></node>
+  <node id="2"><tag k="local_x" v="10"/><tag k="local_y" v="0"/></node>
+  <node id="3"><tag k="local_x" v="0"/><tag k="local_y" v="3"/></node>
+  <node id="4"><tag k="local_x" v="10"/><tag k="local_y" v="3"/></node>
+  <way id="10"><nd ref="1"/><nd ref="2"/>
+    <tag k="type" v="line_thin"/><tag k="subtype" v="dashed"/></way>
+  <way id="11"><nd ref="3"/><nd ref="4"/>
+    <tag k="type" v="line_thin"/><tag k="subtype" v="solid_solid"/></way>
+  <way id="12"><nd ref="1"/><nd ref="3"/>
+    <tag k="type" v="curbstone"/><tag k="subtype" v="high"/></way>
+  <way id="13"><nd ref="2"/><nd ref="4"/><tag k="type" v="road_border"/></way>
+  <way id="14"><nd ref="1"/><nd ref="4"/><tag k="type" v="virtual"/></way>
+  <way id="15"><nd ref="2"/><nd ref="3"/><tag k="type" v="stop_line"/></way>
+  <relation id="19"><member type="way" ref="11" role="left"/>
+    <member type="way" ref="10" role="right"/><tag k="type" v="lanelet"/>
+    <tag k="subtype" v="crosswalk"/><tag k="speed_limit" v="18"/></relation>
+  <relation id="20"><member type="way" ref="11" role="left"/>
+    <member type="way" ref="10" role="right"/><tag k="type" v="lanelet"/>
+    <tag k="subtype" v="road"/><tag k="speed_limit" v="36"/></relation>
+  <relation id="21"><member type="way" ref="11" role="left"/>
+    <member type="way" ref="10" role="right"/><tag k="type" v="lanelet"/></relation>
+</osm>"""
+
+
+def test_parse_osm_kinds():
+    features, _ = convert.parse_osm(OSM)
+    kinds = sorted((f["kind"], tuple(map(tuple, f["pts"]))) for f in features)
+    assert kinds == [
+        ("lane_dashed", ((0.0, 0.0), (10.0, 0.0))),
+        ("lane_solid", ((0.0, 3.0), (10.0, 3.0))),
+        ("road_edge", ((0.0, 0.0), (0.0, 3.0))),
+        ("road_edge", ((10.0, 0.0), (10.0, 3.0))),
+    ]
+
+
+def test_speed_limit_inside_and_outside():
+    _, lanelets = convert.parse_osm(OSM)
+    assert len(lanelets) == 1
+    assert math.isclose(convert.speed_limit_at(lanelets, 5.0, 1.5), 10.0)
+    assert convert.speed_limit_at(lanelets, 5.0, 4.0) is None
+
+
+def test_parse_osm_needs_local_coordinates():
+    bad = (
+        '<osm><node id="7" lat="35.6" lon="139.7"/>'
+        '<way id="1"><nd ref="7"/><tag k="type" v="road_border"/></way></osm>'
+    )
+    with pytest.raises(ValueError, match="node 7"):
+        convert.parse_osm(bad)
+
+
+def test_map_msg_is_valid():
+    features, _ = convert.parse_osm(OSM)
+    schema.validate(convert.map_msg(1.0, features))

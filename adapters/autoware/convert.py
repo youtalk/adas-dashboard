@@ -5,7 +5,10 @@ Every position is in Autoware's `map` frame, which is right-handed like the dash
 """
 
 import math
+import xml.etree.ElementTree as ET
 from typing import NamedTuple
+
+from adapters.carla.world import MAP_RANGE_M
 
 SOURCE = "autoware"
 MIN_SIZE_M = 0.1  # the schema needs sizes above 0. A polygon shape has no box dimensions.
@@ -22,6 +25,11 @@ CLASSES = {
     6: "bicycle",
     7: "pedestrian",
 }
+
+
+class Lanelet(NamedTuple):
+    poly: list[tuple[float, float]]  # the left bound, then the right bound reversed
+    limit_mps: float
 
 
 class Obj(NamedTuple):
@@ -149,3 +157,72 @@ def lead(
         if d <= half_width_m + margin_m and arc > 0.0 and (found is None or arc < found[1]):
             found = (i, arc)
     return found
+
+
+def _kind(tags: dict[str, str]) -> str | None:
+    if tags.get("type") in ("road_border", "curbstone"):
+        return "road_edge"
+    if tags.get("type") in ("line_thin", "line_thick"):
+        subtype = tags.get("subtype", "")
+        if "solid" in subtype:
+            return "lane_solid"
+        if "dashed" in subtype:
+            return "lane_dashed"
+    return None
+
+
+def parse_osm(text: str) -> tuple[list[dict], list[Lanelet]]:
+    """Lane lines and road edges of a Lanelet2 map, and the lanelets that have a speed limit.
+
+    Positions come from the `local_x` and `local_y` node tags, which are Autoware's map frame.
+    """
+    root = ET.fromstring(text)
+    nodes = {n.get("id"): n for n in root.iter("node")}
+
+    def xy(ref: str) -> tuple[float, float]:
+        tags = {t.get("k"): t.get("v") for t in nodes[ref].iter("tag")}
+        if "local_x" not in tags or "local_y" not in tags:
+            raise ValueError(f"node {ref} has no local_x/local_y")
+        return float(tags["local_x"]), float(tags["local_y"])
+
+    def tags_of(e: ET.Element) -> dict[str, str]:
+        return {t.get("k"): t.get("v") for t in e.iter("tag")}
+
+    ways = {w.get("id"): w for w in root.iter("way")}
+    features = []
+    for w in ways.values():
+        kind = _kind(tags_of(w))
+        if kind is not None:
+            pts = [xy(nd.get("ref")) for nd in w.iter("nd")]
+            features.append({"kind": kind, "pts": [[round(x, 2), round(y, 2)] for x, y in pts]})
+    lanelets = []
+    for r in root.iter("relation"):
+        tags = tags_of(r)
+        # A crosswalk or walkway lanelet overlaps the road and can carry its own limit.
+        if tags.get("type") != "lanelet" or tags.get("subtype", "road") != "road":
+            continue
+        if "speed_limit" not in tags:
+            continue
+        bound = {m.get("role"): m.get("ref") for m in r.iter("member")}
+        left = [xy(nd.get("ref")) for nd in ways[bound["left"]].iter("nd")]
+        right = [xy(nd.get("ref")) for nd in ways[bound["right"]].iter("nd")]
+        lanelets.append(Lanelet(left + right[::-1], float(tags["speed_limit"]) / 3.6))
+    return features, lanelets
+
+
+def _inside(poly: list[tuple[float, float]], x: float, y: float) -> bool:
+    """Even-odd ray test."""
+    inside = False
+    for (x1, y1), (x2, y2) in zip(poly, poly[1:] + poly[:1], strict=False):
+        if (y1 > y) != (y2 > y) and x < x1 + (y - y1) * (x2 - x1) / (y2 - y1):
+            inside = not inside
+    return inside
+
+
+def speed_limit_at(lanelets: list[Lanelet], x: float, y: float) -> float | None:
+    # ponytail: first match, overlapping junction lanelets usually share a limit.
+    return next((ll.limit_mps for ll in lanelets if _inside(ll.poly, x, y)), None)
+
+
+def map_msg(t_ms: float, features: list[dict]) -> dict:
+    return {**_envelope("map", t_ms), "frame": "map", "range_m": MAP_RANGE_M, "features": features}
