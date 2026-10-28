@@ -17,6 +17,7 @@ LEAD_MARGIN_M = 0.5  # how far outside the trajectory ribbon an object still cou
 # Autoware ends its plan at the stop point behind the car it stops for: stop margin, front
 # overhang and half the car length put the car's center about 11 m past the plan's end.
 LEAD_BEYOND_M = 15.0
+LEAD_HEADING_M = 1.0  # the extension needs a plan this long to have a direction
 # autoware_adapi_v1_msgs OperationModeState.mode, MrmState.state and MrmState.behavior
 STOP, AUTONOMOUS, LOCAL, REMOTE = 1, 2, 3, 4
 MRM_OPERATING, MRM_SUCCEEDED, MRM_FAILED = 2, 3, 4
@@ -147,7 +148,7 @@ def ahead(path: list[tuple[float, float]], x: float, y: float) -> list[tuple[flo
 def _project(p: tuple[float, float], path: list[tuple[float, float]]) -> tuple[float, float]:
     """(lateral distance, arc length) of the point nearest to p on path, which continues
     straight for LEAD_BEYOND_M past its last point."""
-    best, s0, last = (math.inf, 0.0), 0.0, None
+    best, s0 = (math.inf, 0.0), 0.0
     for a, b in zip(path, path[1:], strict=False):
         dx, dy = b[0] - a[0], b[1] - a[1]
         seg = math.hypot(dx, dy)
@@ -157,15 +158,18 @@ def _project(p: tuple[float, float], path: list[tuple[float, float]]) -> tuple[f
         d = math.dist(p, (a[0] + t * dx, a[1] + t * dy))
         if d < best[0]:
             best = (d, s0 + t * seg)
-        last = (a, dx, dy, seg, s0)
         s0 += seg
-    if last is not None:
-        a, dx, dy, seg, s0 = last
-        dot = (p[0] - a[0]) * dx + (p[1] - a[1]) * dy
-        t = min(max(dot / (seg * seg), 1.0), 1.0 + LEAD_BEYOND_M / seg)
-        d = math.dist(p, (a[0] + t * dx, a[1] + t * dy))
+    # The extension heads from the last point back to one at least LEAD_HEADING_M away. A shorter
+    # plan, like a stopped planner's points that all sit at the ego, has no direction.
+    end = path[-1] if path else None
+    base = next((q for q in reversed(path) if math.dist(q, end) >= LEAD_HEADING_M), None)
+    if base is not None:
+        dx, dy = end[0] - base[0], end[1] - base[1]
+        n = math.hypot(dx, dy)
+        along = min(max(((p[0] - end[0]) * dx + (p[1] - end[1]) * dy) / n, 0.0), LEAD_BEYOND_M)
+        d = math.dist(p, (end[0] + along * dx / n, end[1] + along * dy / n))
         if d < best[0]:
-            best = (d, s0 + t * seg)
+            best = (d, s0 + along)
     return best
 
 

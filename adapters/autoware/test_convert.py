@@ -112,6 +112,12 @@ def test_lead_just_past_a_plan_that_stops_behind_it():
     assert convert.lead([obj(x=26.0, y=3.5)], straight(21), 0.95) is None
 
 
+def test_lead_not_past_a_plan_too_short_to_point_anywhere():
+    # A stopped learned planner puts every point at the ego. Its tiny jitter has no direction.
+    jitter = [(0.0, 0.0), (0.001, 0.0005), (0.002, 0.001)]
+    assert convert.lead([obj(x=10.0, y=5.0)], jitter, 0.95) is None
+
+
 def test_lead_none_without_path_or_objects():
     assert convert.lead([obj()], [], 0.95) is None
     assert convert.lead([obj()], [(0.0, 0.0)], 0.95) is None
