@@ -72,10 +72,12 @@ The adapter reads the operation mode and the MRM state as reliable, transient lo
 
 ## Camera
 
-`adapters/carla/camera` builds a `web_video_server` image. It serves any image topic on port 8080, on the same DDS domain and configuration as the adapter. For a compressed topic, give the raw topic name and add `default_transport=compressed` to the stream URL:
+`adapters/carla/camera` builds a `web_video_server` image. It serves any image topic on port 8080, on the same DDS domain and configuration as the adapter. For a raw `sensor_msgs/Image` topic, use `type=mjpeg`. For a `sensor_msgs/CompressedImage` topic, use `type=ros_compressed` and give the topic name without `/compressed`. The JPEG frames then pass through as they are.
+
+A recording usually replays its cameras as best effort. Then also add `qos_profile=sensor_data` to the stream URL, because `web_video_server` subscribes as reliable by default:
 
 ```text
-http://127.0.0.1:8080/stream?topic=/sensing/camera/front/image_raw&type=mjpeg&default_transport=compressed
+http://127.0.0.1:8080/stream?topic=/sensing/camera/front/image_raw&type=ros_compressed&qos_profile=sensor_data
 ```
 
 Put the stream URL in `camera_url` of `config.json`.
