@@ -51,3 +51,12 @@ def test_bad_enum_fails():
 def test_validate_line_returns_the_message():
     line = (schema.SCHEMA_DIR / "examples/hello.json").read_text().strip()
     assert schema.validate_line(line)["type"] == "hello"
+
+
+RECORDINGS = sorted((schema.SCHEMA_DIR.parent.parent / "recordings").glob("*/*.jsonl"))
+
+
+@pytest.mark.parametrize("path", RECORDINGS, ids=[f"{p.parent.name}/{p.stem}" for p in RECORDINGS])
+def test_recording_validates(path: pathlib.Path):
+    for line in path.read_text().splitlines():
+        schema.validate_line(line)

@@ -423,7 +423,7 @@ Code is Apache-2.0. Recordings are CC0.
 
 ## 10. Development without hardware
 
-Before week 1, the repository holds a generated recording of one full run of the CES scenario. `tools/synth.py` generates it, and the bench recording from W5 replaces it. One JSONL file per endpoint, one message per line, exactly as the endpoint sent it. `tools/replay.py` serves those files on local WebSocket ports with the original timing from `t_ms`, loops or stops at the end, and accepts `--speed`. `tools/record.py` records live endpoints into the same format.
+Before week 1, the repository holds a generated recording of one full run of the CES scenario. `tools/synth.py` generates it. W5 adds a recording of the live bench run next to it. The generated run stays, because only it plays through every state of section 6.3. One JSONL file per endpoint, one message per line, exactly as the endpoint sent it. `tools/replay.py` serves those files on local WebSocket ports with the original timing from `t_ms`, loops or stops at the end, and accepts `--speed`. `tools/record.py` records live endpoints into the same format.
 
 Every frontend feature must be demonstrated on the replay before it is called done.
 
@@ -441,7 +441,7 @@ Work runs from 2026-09-28 to 2026-10-30. Each week ends with something that runs
 
 | Week     | Dates          | Deliverable                                                                                                                                                                                    | Owner         |
 | -------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
-| W0       | 09-22 to 09-26 | repository, JSON Schema v1, a generated recording of the kill route from tools/synth.py, replay.py. The bench recording replaces the generated one in W5                                       | AWF side      |
+| W0       | 09-22 to 09-26 | repository, JSON Schema v1, a generated recording of the kill route from tools/synth.py, replay.py. A bench recording joins it in W5                                                           | AWF side      |
 | W1       | 09-28 to 10-02 | frontend skeleton with Vite, TypeScript and three.js. Connects to the replay. Chase camera. Road plane, map lanes and a box ego move. `hello.schema` is compared                               | MultiCoreWare |
 | W2       | 10-05 to 10-09 | meshes. `.glb` conversion, class to mesh, interpolation by `id`, fade in and out, dark matte material and shadow, CC BY-SA credit                                                              | MultiCoreWare |
 | W3       | 10-12 to 10-16 | perception layers and status panel. Cyan lanes, green trajectory, lead distance label, speed and limit, gap, steering and pedal, latency line. Alert state                                     | MultiCoreWare |
