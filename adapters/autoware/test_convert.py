@@ -240,3 +240,9 @@ def test_hello_control_and_supervisor_status_are_valid():
     ):
         schema.validate(m)
     assert convert.supervisor_status(1.0, 1)["mode"] == "standby"
+
+
+def test_gap_is_from_our_front_to_the_lead_rear():
+    # The plan runs through the rear axle and the lead's center. The panel shows the bumper gap.
+    assert math.isclose(convert.gap(30.0, 4.5, 3.79), 23.96)
+    assert convert.gap(5.0, 4.5, 3.79) == 0.0

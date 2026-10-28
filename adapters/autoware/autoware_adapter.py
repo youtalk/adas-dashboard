@@ -139,6 +139,8 @@ async def run(args: argparse.Namespace) -> None:
         if take("objects"):
             objs = convert.finite([to_obj(o) for o in latest["objects"].objects])
             found = convert.lead(objs, path, args.vehicle_width / 2, args.lead_margin)
+            if found:
+                found = (found[0], convert.gap(found[1], objs[found[0]].length, args.front_m))
             stack.broadcast(convert.objects_msg(t, objs, ids, found))
 
         mode, mrm = latest.get("mode"), latest.get("mrm")
@@ -166,6 +168,12 @@ if __name__ == "__main__":
     ap.add_argument("--world-port", type=int, default=8091)
     ap.add_argument("--supervisor-port", type=int, default=8092)
     ap.add_argument("--vehicle-width", type=float, default=1.9, help="m, the trajectory width")
+    ap.add_argument(
+        "--front-m",
+        type=float,
+        default=3.79,
+        help="m from the rear axle to the front bumper (Autoware sample_vehicle: 2.79 + 1.0)",
+    )
     ap.add_argument(
         "--lead-margin",
         type=float,

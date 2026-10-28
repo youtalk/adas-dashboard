@@ -197,6 +197,11 @@ def lead(
     return found
 
 
+def gap(arc_m: float, lead_length_m: float, front_m: float) -> float:
+    """From our front bumper to the lead's rear. arc_m runs from our rear axle to its center."""
+    return max(arc_m - lead_length_m / 2 - front_m, 0.0)
+
+
 def _kind(tags: dict[str, str]) -> str | None:
     if tags.get("type") in ("road_border", "curbstone"):
         return "road_edge"

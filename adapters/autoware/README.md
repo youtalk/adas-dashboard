@@ -28,7 +28,7 @@ Stop mode is `stack`, because Autoware holds the vehicle before engage and after
 
 ## Lead vehicle
 
-Autoware does not mark a lead vehicle. The adapter marks the nearest object ahead whose center is within half the vehicle width plus a margin of the trajectory. `distance_m` is the distance along the trajectory from the ego to that object. Autoware ends its plan at the stop point behind a car that it stops for. For this rule, the adapter extends the trajectory 15 m straight past its last point. `--vehicle-width` (default 1.9 m) also sets the trajectory width on the page. `--lead-margin` sets the margin (default 0.5 m).
+Autoware does not mark a lead vehicle. The adapter marks the nearest object ahead whose center is within half the vehicle width plus a margin of the trajectory. `distance_m` is the gap from the ego's front bumper to the rear of that object, along the trajectory. `--front-m` sets the distance from the rear axle to the front bumper (default 3.79 m, the Autoware sample vehicle). Autoware ends its plan at the stop point behind a car that it stops for. For this rule, the adapter extends the trajectory 15 m straight past its last point. Past the last point, only an object that heads within 60 degrees of the trajectory counts. A car that crosses the junction ahead is then not the lead. `--vehicle-width` (default 1.9 m) also sets the trajectory width on the page. `--lead-margin` sets the margin (default 0.5 m).
 
 ## Build
 
