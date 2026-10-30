@@ -26,6 +26,12 @@ Every topic is an option with the default below. All positions are in Autoware's
 
 Stop mode is `stack`, because Autoware holds the vehicle before engage and after arrival.
 
+## Object yaw and size
+
+An object slower than 1 m/s keeps its last yaw. When Autoware does not know which way a stopped car faces, it turns the car 180 degrees each time the noise in its speed points backward. A standing pedestrian has no heading.
+
+Each message moves the drawn size 10% of the way to the new box, so a size settles in about 2 s. The box height changes with the lidar points of each frame.
+
 ## Lead vehicle
 
 Autoware does not mark a lead vehicle. The adapter marks the nearest object ahead whose center is within half the vehicle width plus a margin of the trajectory. `distance_m` is the gap from the ego's front bumper to the rear of that object, along the trajectory. `--front-m` sets the distance from the rear axle to the front bumper (default 3.79 m, the Autoware sample vehicle). Autoware ends its plan at the stop point behind a car that it stops for. For this rule, the adapter extends the trajectory 15 m straight past its last point. Past the last point, only an object that heads within 60 degrees of the trajectory counts. A car that crosses the junction ahead is then not the lead. `--vehicle-width` (default 1.9 m) also sets the trajectory width on the page. `--lead-margin` sets the margin (default 0.5 m).

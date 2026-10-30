@@ -42,6 +42,30 @@ def test_finite_drops_only_the_bad_object():
     assert convert.finite([good, bad, obj(b"i", y=math.inf)]) == [good]
 
 
+def test_steady_holds_the_yaw_of_a_slow_object():
+    last: dict[bytes, convert.Obj] = {}
+    first = convert.steady([obj(b"a")._replace(yaw=0.1)], last)
+    assert first[0].yaw == 0.1
+    # The stack flips a parked car: its speed is noise, so the yaw stays.
+    flipped = obj(b"a")._replace(yaw=0.1 + math.pi, speed=0.6)
+    assert convert.steady([flipped], last)[0].yaw == 0.1
+    # A moving car takes the yaw of the stack.
+    moving = obj(b"a")._replace(yaw=0.5, speed=convert.HOLD_YAW_MPS)
+    assert convert.steady([moving], last)[0].yaw == 0.5
+    # A gone object is forgotten.
+    convert.steady([obj(b"b")], last)
+    assert list(last) == [b"b"]
+
+
+def test_steady_moves_the_size_part_of_the_way():
+    last: dict[bytes, convert.Obj] = {}
+    assert convert.steady([obj(height=1.5)], last)[0].height == 1.5
+    # A frame with a low box only lowers the drawn height a little.
+    o = convert.steady([obj(length=5.5, height=0.5)], last)[0]
+    assert math.isclose(o.height, 1.5 - convert.SIZE_ALPHA)
+    assert math.isclose(o.length, 4.5 + convert.SIZE_ALPHA)
+
+
 def test_objects_msg_classes_sizes_and_lead():
     objs = [obj(b"a", label=1), obj(b"b", label=0, length=0.0, width=0.0), obj(b"c", label=5)]
     m = convert.objects_msg(1.0, objs, {}, (0, 32.14))
