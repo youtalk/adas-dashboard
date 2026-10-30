@@ -6,6 +6,7 @@ and `supervisor`. Run it in the image from adapters/autoware/Dockerfile. See REA
 
 import argparse
 import asyncio
+import math
 import pathlib
 import threading
 import time
@@ -35,6 +36,7 @@ def now_ms() -> float:
 
 def to_obj(o) -> convert.Obj:
     pose = o.kinematics.initial_pose_with_covariance.pose
+    v = o.kinematics.initial_twist_with_covariance.twist.linear
     q, dim = pose.orientation, o.shape.dimensions
     length, width = dim.x, dim.y
     if o.shape.type == Shape.POLYGON and o.shape.footprint.points:
@@ -49,6 +51,7 @@ def to_obj(o) -> convert.Obj:
         length,
         width,
         dim.z,
+        math.hypot(v.x, v.y),
     )
 
 
@@ -112,6 +115,7 @@ async def run(args: argparse.Namespace) -> None:
     print(f"stack, world and supervisor endpoints on {args.host} ports {ports}", flush=True)
 
     ids: dict[bytes, int] = {}
+    last: dict[bytes, convert.Obj] = {}
     path: list[tuple[float, float]] = []
     last_map, prev, tick = None, None, 0
     while True:
@@ -138,6 +142,7 @@ async def run(args: argparse.Namespace) -> None:
             stack.broadcast(convert.trajectory_msg(t, path, args.vehicle_width))
         if take("objects"):
             objs = convert.finite([to_obj(o) for o in latest["objects"].objects])
+            objs = convert.steady(objs, last)  # before lead(), which reads the yaw and length
             found = convert.lead(objs, path, args.vehicle_width / 2, args.lead_margin)
             if found:
                 found = (found[0], convert.gap(found[1], objs[found[0]].length, args.front_m))

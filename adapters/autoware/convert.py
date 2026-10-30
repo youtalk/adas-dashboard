@@ -19,6 +19,17 @@ LEAD_MARGIN_M = 0.5  # how far outside the trajectory ribbon an object still cou
 LEAD_BEYOND_M = 15.0
 LEAD_HEADING_M = 1.0  # the extension needs a plan this long to have a direction
 LEAD_ALIGN_COS = 0.5  # past the plan's end, only objects heading within 60 degrees of it count
+# Below this speed an object keeps its last yaw. When Autoware does not know which way a parked
+# car faces, it turns the car 180 degrees each time the noise in its speed points backward. It also
+# has no heading for a standing pedestrian. In a recorded 60 s city drive this cut the yaw jumps
+# over 45 degrees from 1177 to 90. At 1.5 m/s, walking pedestrians faced the wrong way 10 times
+# as often.
+HOLD_YAW_MPS = 1.0
+# Each message moves the drawn size this part of the way to the new box, so it settles in about
+# 2 s at 10 Hz. Autoware's box height follows the lidar points of each frame: one truck went 2.60,
+# 2.29, 1.96 and 2.59 m in four frames. In the same drive this cut the car frames whose size
+# changed by more than 5% from 14% to 0.2%. At 0.2 it was 2.6%.
+SIZE_ALPHA = 0.1
 # autoware_adapi_v1_msgs OperationModeState.mode, MrmState.state and MrmState.behavior
 STOP, AUTONOMOUS, LOCAL, REMOTE = 1, 2, 3, 4
 MRM_OPERATING, MRM_SUCCEEDED, MRM_FAILED = 2, 3, 4
@@ -58,6 +69,7 @@ class Obj(NamedTuple):
     length: float
     width: float
     height: float
+    speed: float = 0.0  # m/s
 
 
 def _envelope(type_: str, t_ms: float) -> dict:
@@ -95,6 +107,31 @@ def footprint_size(pts: list[tuple[float, float]]) -> tuple[float, float]:
 def finite(objs: list[Obj]) -> list[Obj]:
     """Drop objects with a NaN or infinite value. One such value would drop the whole message."""
     return [o for o in objs if all(math.isfinite(v) for v in o[2:])]
+
+
+def steady(objs: list[Obj], last: dict[bytes, Obj]) -> list[Obj]:
+    """Keep the last yaw of objects slower than HOLD_YAW_MPS, and smooth every size by SIZE_ALPHA.
+
+    last maps a uuid to the object sent last, and keeps only the objects of this message.
+    """
+
+    def ease(p: float, x: float) -> float:
+        return p + SIZE_ALPHA * (x - p)
+
+    out = []
+    for o in objs:
+        p = last.get(o.uuid)
+        if p is not None:
+            o = o._replace(
+                yaw=o.yaw if o.speed >= HOLD_YAW_MPS else p.yaw,
+                length=ease(p.length, o.length),
+                width=ease(p.width, o.width),
+                height=ease(p.height, o.height),
+            )
+        out.append(o)
+    last.clear()
+    last.update((o.uuid, o) for o in out)
+    return out
 
 
 def stable_id(ids: dict[bytes, int], uuid: bytes) -> int:
