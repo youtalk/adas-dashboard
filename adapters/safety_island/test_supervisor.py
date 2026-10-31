@@ -56,3 +56,11 @@ def test_hello_validates():
     h = sv.hello(0.0)
     schema.validate(h)
     assert (h["name"], h["device"], h["roles"]) == ("Safety Island", "Cortex-R52", ["supervisor"])
+
+
+def test_the_device_name_is_an_option():
+    assert sv.hello(1.0)["device"] == "Cortex-R52"
+    assert sv.hello(1.0, device="Cortex-R82")["device"] == "Cortex-R82"
+    status = sv.messages(1.0, "stack", None, 0, None, "Stack", device="Cortex-R82")[1]
+    schema.validate(status)
+    assert status["device"] == "Cortex-R82"

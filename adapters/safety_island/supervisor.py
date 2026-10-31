@@ -13,13 +13,13 @@ def _envelope(type_: str, t_ms: float) -> dict:
     return {"source": SOURCE, "type": type_, "t_ms": round(t_ms, 1)}
 
 
-def hello(t_ms: float) -> dict:
+def hello(t_ms: float, device: str = DEVICE) -> dict:
     return {
         **_envelope("hello", t_ms),
         "schema": 1,
         "roles": ["supervisor"],
         "name": NAME,
-        "device": DEVICE,
+        "device": device,
     }
 
 
@@ -35,6 +35,7 @@ def messages(
     tick: int,
     cmd: tuple[float, float] | None,
     stack_name: str,
+    device: str = DEVICE,
 ) -> list[dict]:
     """One loop step. cmd is the last (steer_rad, accel_mps2). prev is None on a first step."""
     control = {**_envelope("control", t_ms), "authority": auth}
@@ -55,7 +56,7 @@ def messages(
             {
                 **_envelope("status", t_ms),
                 "name": NAME,
-                "device": DEVICE,
+                "device": device,
                 "mode": "active" if engaged else "standby",
             },
         )
