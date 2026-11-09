@@ -152,7 +152,8 @@ export class AlertPill {
     // A banner hides the alert, so its pulse does not apply.
     if (this.banner) return;
 
-    if (this.severity === "critical") {
+    // AEB is the car acting, not a request to the driver, so it does not pulse.
+    if (this.severity === "critical" && this.top?.code !== "AEB") {
       this.pulse(dt);
     } else {
       this.el.style.opacity = "1";

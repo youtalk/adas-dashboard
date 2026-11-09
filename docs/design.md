@@ -337,6 +337,10 @@ Two independent signals decide the state: whether the `stack` endpoint is alive,
 
 Alert: the `target` gets the red treatment (a red ring around the lead vehicle, a red trajectory, a red lane line). The pill at the top center shows `text` with `code` in small print. `critical` pulses the pill at 1 Hz. If the alert list becomes empty, the page holds the state for 500 ms and then clears it. A flickering alert therefore does not flicker on screen.
 
+Forward collision warning: the page computes its own time to collision (TTC) to the lead vehicle. TTC is the lead `distance_m` of the `stack` `objects` divided by the closing speed. The closing speed comes from the change of `distance_m` over the last second, on the `stack` clock. If `distance_m` jumps by more than 6 m, the page treats the new lead as stopped. Until a history builds up, it uses the ego `speed_mps` as the closing speed. If the TTC falls below `fcw_ttc_s` (section 7), the page adds the alert `Brake: vehicle ahead` with code `FCW`, `critical` and target `lead`. When the TTC rises 0.3 s above the threshold, the alert ends.
+
+The page drops the `FCW` that the stack sends, because VisionPilot sets it for planned braking, not as an early warning. A stack `AEB` shows over the page `FCW` and does not pulse, because the car brakes by itself. `AEB` also turns the trajectory red. The page clears its warning in Stack lost, Takeover and Stopped.
+
 ![Takeover state](mockups/03-takeover.png)
 
 ![Stopped state](mockups/04-stopped.png)
@@ -380,6 +384,7 @@ Keyboard, plus the two camera buttons of section 6.1:
   "camera_url": "data:text/html,<body style='margin:0;overflow:hidden;background:black'><img src='http://127.0.0.1:8080/stream?topic=/carla/hero/main_cam/image&type=mjpeg&quality=80&width=640&height=360' onerror='setTimeout(()=>{this.src=this.src},1000)' style='width:100%25;height:100%25;object-fit:cover'>",
   "units": "mph",
   "theme": "dark",
+  "fcw_ttc_s": 3.0,
   "camera": {
     "chase": { "pitch_deg": 25, "distance_m": 18, "lookahead_m": 12 },
     "high": { "pitch_deg": 50, "distance_m": 60, "lookahead_m": 30 }
@@ -388,6 +393,8 @@ Keyboard, plus the two camera buttons of section 6.1:
 ```
 
 URL query parameters override `config.json` key by key.
+
+`fcw_ttc_s` is the time to collision in seconds below which the page warns (section 6.3). Without the key, the page uses 3.0 s.
 
 Both camera presets use a 45° vertical field of view.
 
@@ -474,7 +481,7 @@ If all of these hold, the work is complete:
 
 For reference, not for MultiCoreWare to build.
 
-VisionPilot (`stack`): a WebSocket server in the VisionPilot process, next to the existing WebRTC stream in `modules/visualization/`, reusing Boost.Beast and nlohmann/json that are already linked. It sends `objects`, `trajectory`, `alerts` and `status`. VisionPilot perceives no lane lines, only its planned path, so it sends no `lanes`. It does not know who controls the car, so it sends no `control`. AutoSpeed boxes go to the ground through the homography with the Occupancy view's rule. `class` is `car` or `truck` from the same width heuristic, and a nearest-neighbor tracker gives each box a stable `id`. The trajectory is the path polynomial sampled every meter to 150 m, with an empty `pts` for a frame whose fit failed. `alerts` come from `Plan::warnings`. `FCW` and `AEB` are `critical` with target `lead`. `LLDW` and `RLDW` are `info` with target `trajectory`, because lateral oscillation on the bench would otherwise keep the page in Alert. `status.stages` come from the per-frame latency fields. VisionPilot has no flag yet that streams the camera without its HUD. A vehicle without CARLA needs one for the PiP.
+VisionPilot (`stack`): a WebSocket server in the VisionPilot process, next to the existing WebRTC stream in `modules/visualization/`, reusing Boost.Beast and nlohmann/json that are already linked. It sends `objects`, `trajectory`, `alerts` and `status`. VisionPilot perceives no lane lines, only its planned path, so it sends no `lanes`. It does not know who controls the car, so it sends no `control`. AutoSpeed boxes go to the ground through the homography with the Occupancy view's rule. `class` is `car` or `truck` from the same width heuristic, and a nearest-neighbor tracker gives each box a stable `id`. The trajectory is the path polynomial sampled every meter to 150 m, with an empty `pts` for a frame whose fit failed. `alerts` come from `Plan::warnings`. `FCW` and `AEB` are `critical` with target `lead`. VisionPilot sets `FCW` for planned braking from -3 to -5 m/s², so the page drops it and shows its own warning (section 6.3). `LLDW` and `RLDW` are `info` with target `trajectory`, because lateral oscillation on the bench would otherwise keep the page in Alert. `status.stages` come from the per-frame latency fields. VisionPilot has no flag yet that streams the camera without its HUD. A vehicle without CARLA needs one for the PiP.
 
 CARLA (`vehicle`, `map`): a Python client on the CARLA host that never ticks the world. It reads the ego actor's transform, velocity and acceleration once per simulation step, so `ego` goes out at the simulation rate of 10 Hz. It builds the lane boundaries from the OpenDRIVE map once and sends the part within 200 m of the ego. The camera PiP on the bench shows CARLA's own camera topic, `/carla/hero/main_cam/image`, as an MJPEG stream from `web_video_server` in a container on the CARLA host (`adapters/carla/camera/`). The board's VisionPilot then encodes no video, so its 80 ms frame deadline under the S-CORE launch manager is not affected.
 

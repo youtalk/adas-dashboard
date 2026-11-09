@@ -6,6 +6,7 @@ export type Config = {
   units: "mph" | "km/h";
   theme: "dark" | "light";
   camera: { chase: CameraPreset; high: CameraPreset };
+  fcw_ttc_s?: number; // the page warns below this time to collision
 };
 
 const SCALAR_KEYS = ["camera_url", "units", "theme"] as const;

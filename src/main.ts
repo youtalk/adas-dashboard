@@ -6,6 +6,7 @@ import {
   setRoles,
   recordMessage,
   closeEndpoint,
+  hasRole,
   latestByRole,
   allByRole,
   newestOfType,
@@ -20,6 +21,7 @@ import { ObjectManager, type RawObject } from "./objects";
 import { replaceEgoMesh } from "./ego";
 import { Hud, leadLabelText, type HudData } from "./hud";
 import { AlertPill, collectAlerts, type Banner } from "./alert";
+import { Fcw, FCW_DEFAULT_TTC_S, leadDistance, withPageFcw } from "./fcw";
 import { LaneManager, type RawLane } from "./lanes";
 import { TrajectoryRibbon } from "./trajectory";
 import { StateMachine, isGhost, readInputs, type PageState } from "./states";
@@ -87,6 +89,7 @@ const laneManager = new LaneManager(scene);
 const trajectory = new TrajectoryRibbon(scene);
 const hud = new Hud();
 const alertPill = new AlertPill();
+const fcw = new Fcw();
 const machine = new StateMachine();
 const pip = new CameraPip();
 
@@ -197,9 +200,13 @@ function animate() {
   lastTime = now;
   let egoPoseChanged = false;
 
-  // --- alerts: union across all stack/supervisor endpoints ---
+  // --- alerts: union across all stack/supervisor endpoints, with the page's
+  //     own FCW in place of the stack's (design section 6.3) ---
   alertPill.setAlerts(
-    collectAlerts([...allByRole("stack", "alerts"), ...allByRole("supervisor", "alerts")]),
+    withPageFcw(
+      collectAlerts([...allByRole("stack", "alerts"), ...allByRole("supervisor", "alerts")]),
+      fcw.state.warn,
+    ),
   );
 
   // --- page state (design section 6.3) ---
@@ -209,6 +216,7 @@ function animate() {
   // Stack lost, Takeover and Stopped: the stack layers fade to ghosts and hold.
   // They come back with the first stack message after the state ends.
   const ghost = isGhost(state);
+  if (ghost) fcw.reset();
   if (ghost && !wasGhost) {
     objManager.stackLost();
     laneManager.stackLost();
@@ -307,7 +315,7 @@ function animate() {
   // hold also covers the ring, trajectory, and lane colors (design §6.3).
   const targets = new Set(alertPill.held.map((a) => a.target).filter(Boolean) as string[]);
   objManager.setLeadAlert(targets.has("lead"));
-  trajectory.setAlert(targets.has("trajectory"));
+  trajectory.setAlert(targets.has("trajectory") || alertPill.held.some((a) => a.code === "AEB"));
   laneManager.setAlertKinds(["left", "right"].filter((kind) => targets.has(`lane_${kind}`)));
 
   // --- who has control (Takeover and Stopped) ---
@@ -414,6 +422,7 @@ fetchConfig()
     units = c.units;
     setTheme(c.theme);
     pip.start(c.camera_url);
+    fcw.thresholdS = c.fcw_ttc_s ?? FCW_DEFAULT_TTC_S;
 
     cameraController = createCameraController(camera, c.camera);
 
@@ -427,6 +436,7 @@ fetchConfig()
             laneManager.clear();
             trajectory.clear();
             alertPill.reset();
+            fcw.reset();
           }
           setRoles(n, hello.roles, hello.name);
         },
@@ -434,6 +444,11 @@ fetchConfig()
           if (!isWellFormed(msg)) return; // one bad message must not stop the frame loop
           recordMessage(n, msg);
           machine.onMessage(n, msg);
+          // The page's TTC warning, on the stack clock only. Not in the ghost states.
+          if (msg.type === "objects" && hasRole(n, "stack") && !isGhost(machine.state)) {
+            const ego = latestByRole("vehicle", "ego") as EgoMsg | undefined;
+            fcw.update(msg.t_ms as number, leadDistance(msg), ego?.speed_mps ?? 0);
+          }
         },
         onClose: (n) => {
           // The state machine sees the closed stack and ghosts its layers.
