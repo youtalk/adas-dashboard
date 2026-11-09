@@ -85,3 +85,38 @@ def test_generate_is_deterministic(tmp_path):
     synth.generate(b)
     assert (a / "stack.jsonl").read_bytes() == (b / "stack.jsonl").read_bytes()
     assert (a / "world.jsonl").read_bytes() == (b / "world.jsonl").read_bytes()
+
+
+def test_cut_out_writes_valid_recordings(tmp_path):
+    synth.generate_cut_out(tmp_path)
+    stack, world = lines(tmp_path / "stack.jsonl"), lines(tmp_path / "world.jsonl")
+    assert stack[0]["roles"] == ["stack"] and set(world[0]["roles"]) == {"vehicle", "map"}
+    for f in (stack, world):
+        assert [m["t_ms"] for m in f] == sorted(m["t_ms"] for m in f)
+
+
+def test_cut_out_timeline(tmp_path):
+    synth.generate_cut_out(tmp_path)
+    stack = lines(tmp_path / "stack.jsonl")
+    t0 = stack[1]["t_ms"]
+    leads = [
+        ((m["t_ms"] - t0) / 1000, o)
+        for m in stack
+        if m["type"] == "objects"
+        for o in m["objects"]
+        if o["lead"]
+    ]
+    assert len({o["id"] for t, o in leads if t < 8}) >= 20  # id churn far away
+    before = [o["distance_m"] for t, o in leads if 14.5 < t < 15.0]
+    after = [o["distance_m"] for t, o in leads if 15.0 <= t < 15.1]
+    assert abs(before[-1] - 28) < 0.5 and abs(after[0] - 35) < 0.5
+    aeb = [
+        (m["t_ms"] - t0) / 1000
+        for m in stack
+        if m["type"] == "alerts" and any(a["code"] == "AEB" for a in m["alerts"])
+    ]
+    assert abs(aeb[0] - 16.5) < 0.05
+    assert not any(a["code"] == "FCW" for m in stack if m["type"] == "alerts" for a in m["alerts"])
+    # At the stop the ego stays at least 1 m short of the stopped car, bumper to bumper.
+    # The ego frame x of the last lead is the distance between the two centers.
+    assert leads[-1][1]["x"] - synth.CUT_BODY_M >= 1.0

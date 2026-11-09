@@ -1,6 +1,7 @@
 """Generate the W0 recording of the CES 2027 kill route (design sections 10 and 12).
 
 Usage: python3 -m tools.synth [OUT_DIR]   (default recordings/ces2027-kill-route)
+       python3 -m tools.synth --cut-out [OUT_DIR]   (default recordings/ces2027-cut-out)
 The road is y = A * sin(x / L) in the map frame. The ego drives the lane center at CRUISE_MPS.
 """
 
@@ -22,6 +23,21 @@ WORLD_T0 = 1790000000000.0
 SPEED_LIMIT_MPS = 13.4
 TRUCK_BIRTH_S, TRUCK_DEATH_S = 8.0, 30.0
 LDW_S, LDW_HOLD_S = 12.0, 2.0
+
+# The cut-out (design section 6.3 of the forward collision warning): the ego
+# follows a lead, the lead changes lanes and shows a stopped car, the page warns,
+# and then the stack brakes by itself.
+CUT_END_S = 25.0
+CUT_EGO_MPS = 13.9
+CUT_FAR_GAP_M, CUT_FAR_END_S = 45.0, 8.0  # far lead, new id every CUT_ID_FRAMES
+CUT_ID_FRAMES = 3
+CUT_FOLLOW_GAP_M, CUT_FOLLOW_S = 28.0, 12.0  # gap closes until CUT_FOLLOW_S
+CUT_S = 15.0  # the lead leaves the lane
+CUT_STOPPED_GAP_M = 35.0  # the stopped car at CUT_S
+CUT_AEB_GAP_M = 15.0  # the stack sends AEB at this gap or less
+CUT_AEB_MPS2 = 8.0
+CUT_BODY_M = 4.5  # distance_m is bumper to bumper: half the ego plus half the car
+CUT_NOISE_M = 0.3
 
 
 def road_y(x: float) -> float:
@@ -262,5 +278,122 @@ def generate(out_dir: pathlib.Path) -> None:
     (out_dir / "world.jsonl").write_text("\n".join(world) + "\n")
 
 
+def cut_follow_gap(t: float) -> float:
+    """Gap to the moving lead in meters, until CUT_S."""
+    if t < CUT_FAR_END_S:
+        return CUT_FAR_GAP_M
+    k = min(1.0, (t - CUT_FAR_END_S) / (CUT_FOLLOW_S - CUT_FAR_END_S))
+    return CUT_FAR_GAP_M + (CUT_FOLLOW_GAP_M - CUT_FAR_GAP_M) * k
+
+
+def generate_cut_out(out_dir: pathlib.Path) -> None:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    stack = [
+        msg(
+            "visionpilot",
+            "hello",
+            0,
+            schema=1,
+            roles=["stack"],
+            name="VisionPilot",
+            device="R-Car X5H NPU",
+        )
+    ]
+    world = [msg("bench", "hello", 0, schema=1, roles=["vehicle", "map"], name="CARLA bench")]
+    x = v = 0.0
+    lead_x = stop_x = 0.0  # stations of the moving lead after CUT_S and of the stopped car
+    braking = False
+    last_map_x = -1e9
+    cut_i = round(CUT_S / DT)
+    for i in range(int(CUT_END_S / DT) + 1):
+        t = i * DT
+        v = max(0.0, v - CUT_AEB_MPS2 * DT) if braking else CUT_EGO_MPS
+        x += v * DT
+        y, yaw = road_y(x), road_yaw(x)
+        st, wt = STACK_T0 + t * 1000, WORLD_T0 + t * 1000
+        if i == cut_i:
+            lead_x, stop_x = x + CUT_FOLLOW_GAP_M, x + CUT_STOPPED_GAP_M
+        elif i > cut_i:
+            lead_x += CUT_EGO_MPS * DT
+        cut = i >= cut_i
+        aeb = cut and v > 0 and stop_x - x <= CUT_AEB_GAP_M
+        braking = braking or aeb
+        noise = CUT_NOISE_M * math.sin(1.7 * i)
+
+        def obj(oid, station, d, x=x, y=y, yaw=yaw, **extra):
+            ox, oy = to_ego(*offset(x + station + CUT_BODY_M, d), x, y, yaw)
+            return {
+                "id": oid,
+                "class": "car",
+                "x": ox,
+                "y": oy,
+                "yaw": round(road_yaw(x + station + CUT_BODY_M) - yaw, 4),
+                "length": 4.5,
+                "width": 1.9,
+                "height": 1.5,
+                **extra,
+            }
+
+        if not cut:
+            gap = cut_follow_gap(t)
+            oid = 100 + i // CUT_ID_FRAMES if t < CUT_FAR_END_S else 7
+            objects = [obj(oid, gap, 0.0, lead=True, distance_m=round(gap + noise, 2))]
+        else:
+            d = LANE_W * min(1.0, (t - CUT_S) / 1.0)  # into the left lane over 1 s
+            gap = stop_x - x
+            objects = [
+                obj(7, lead_x - x, d, lead=False),
+                obj(21, gap, 0.0, lead=True, distance_m=round(gap + noise, 2)),
+            ]
+        stack.append(msg("visionpilot", "objects", st, frame="ego", objects=objects))
+        traj = [list(to_ego(*offset(x + s, 0.0), x, y, yaw)) for s in range(1, 151)]
+        stack.append(msg("visionpilot", "trajectory", st, frame="ego", width_m=2.3, pts=traj))
+        alerts = []
+        if aeb:
+            alerts.append(
+                {
+                    "code": "AEB",
+                    "severity": "critical",
+                    "text": "Emergency braking",
+                    "target": "lead",
+                }
+            )
+        stack.append(msg("visionpilot", "alerts", st, alerts=alerts))
+        if i % 10 == 0:
+            stack.append(
+                msg(
+                    "visionpilot",
+                    "status",
+                    st,
+                    name="VisionPilot",
+                    device="R-Car X5H NPU",
+                    mode="active",
+                    speed_limit_mps=SPEED_LIMIT_MPS,
+                )
+            )
+        world.append(
+            msg(
+                "bench",
+                "ego",
+                wt,
+                speed_mps=round(v, 2),
+                steer_rad=0.0,
+                accel_mps2=-CUT_AEB_MPS2 if braking and v > 0 else 0.0,
+                pose_map={"x": round(x, 2), "y": round(y, 2), "yaw": round(yaw, 4)},
+            )
+        )
+        if x - last_map_x > 20.0:
+            world.append(
+                msg("bench", "map", wt, frame="map", range_m=200, features=map_features(x))
+            )
+            last_map_x = x
+    (out_dir / "stack.jsonl").write_text("\n".join(stack) + "\n")
+    (out_dir / "world.jsonl").write_text("\n".join(world) + "\n")
+
+
 if __name__ == "__main__":
-    generate(pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "recordings/ces2027-kill-route"))
+    args = sys.argv[1:]
+    if args[:1] == ["--cut-out"]:
+        generate_cut_out(pathlib.Path(args[1] if len(args) > 1 else "recordings/ces2027-cut-out"))
+    else:
+        generate(pathlib.Path(args[0] if args else "recordings/ces2027-kill-route"))
