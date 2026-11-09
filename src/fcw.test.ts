@@ -63,6 +63,17 @@ describe("Fcw", () => {
     expect(s.every((x) => !x.warn)).toBe(true);
     expect(s.at(-4)!.ttcS).toBeNull();
   });
+  it("uses the stopped-lead fallback once per jump (gap after a jump)", () => {
+    const f = new Fcw();
+    feed(
+      f,
+      n(15, () => 28),
+      13.9,
+    );
+    // The new lead moves at ego speed. It drops out for 0.9 s and comes back.
+    const s = feed(f, [...n(4, () => 35), ...n(9, () => null), ...n(3, () => 35)], 13.9, 2500);
+    expect(s.slice(2).every((x) => !x.warn)).toBe(true);
+  });
   it("gives no TTC below the ego speed floor", () => {
     const f = new Fcw();
     feed(

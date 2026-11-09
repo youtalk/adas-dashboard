@@ -77,8 +77,10 @@ export class Fcw {
     this.samples.push({ t: tMs, d: leadDistM });
 
     let closing: number | null;
-    if (this.samples.length >= MIN_SAMPLES) closing = -slope(this.samples);
-    else closing = this.newObject ? egoMps : null;
+    if (this.samples.length >= MIN_SAMPLES) {
+      closing = -slope(this.samples);
+      this.newObject = false; // the fallback is for the first frames after a jump only
+    } else closing = this.newObject ? egoMps : null;
 
     const ttcS =
       closing === null || egoMps < MIN_EGO_MPS || closing < MIN_CLOSING_MPS
