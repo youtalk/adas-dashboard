@@ -22,6 +22,7 @@ import { replaceEgoMesh } from "./ego";
 import { Hud, leadLabelText, type HudData } from "./hud";
 import { AlertPill, collectAlerts, type Banner } from "./alert";
 import { Fcw, FCW_DEFAULT_TTC_S, leadDistance, withPageFcw } from "./fcw";
+import { TtcBar, ttcBarView } from "./ttcbar";
 import { LaneManager, type RawLane } from "./lanes";
 import { TrajectoryRibbon } from "./trajectory";
 import { StateMachine, isGhost, readInputs, type PageState } from "./states";
@@ -90,6 +91,7 @@ const trajectory = new TrajectoryRibbon(scene);
 const hud = new Hud();
 const alertPill = new AlertPill();
 const fcw = new Fcw();
+const ttcBar = new TtcBar();
 const machine = new StateMachine();
 const pip = new CameraPip();
 
@@ -217,6 +219,9 @@ function animate() {
   // They come back with the first stack message after the state ends.
   const ghost = isGhost(state);
   if (ghost) fcw.reset();
+  // The ghost states hide the TTC bar: the reset clears the TTC, and AEB does not count.
+  const aeb = alertPill.held.some((a) => a.code === "AEB");
+  ttcBar.show(ttcBarView(fcw.state.ttcS, fcw.thresholdS, aeb && !ghost));
   if (ghost && !wasGhost) {
     objManager.stackLost();
     laneManager.stackLost();
@@ -315,7 +320,7 @@ function animate() {
   // hold also covers the ring, trajectory, and lane colors (design §6.3).
   const targets = new Set(alertPill.held.map((a) => a.target).filter(Boolean) as string[]);
   objManager.setLeadAlert(targets.has("lead"));
-  trajectory.setAlert(targets.has("trajectory") || alertPill.held.some((a) => a.code === "AEB"));
+  trajectory.setAlert(targets.has("trajectory") || aeb);
   laneManager.setAlertKinds(["left", "right"].filter((kind) => targets.has(`lane_${kind}`)));
 
   // --- who has control (Takeover and Stopped) ---

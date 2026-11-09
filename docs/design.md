@@ -341,6 +341,8 @@ Forward collision warning: the page computes its own time to collision (TTC) to 
 
 The page drops the `FCW` that the stack sends, because VisionPilot sets it for planned braking, not as an early warning. A stack `AEB` shows over the page `FCW` and does not pulse, because the car brakes by itself. `AEB` also turns the trajectory red. The page clears its warning in Stack lost, Takeover and Stopped.
 
+A TTC bar under the pill shows the TTC on a scale from 0 to 4 s. A marker and the value show the current TTC. The bar shows only while the lead is closing and the TTC is under 4 s. The part below `fcw_ttc_s` is amber and the rest is green. During `AEB` the whole bar is red. The bar hides in Stack lost, Takeover and Stopped.
+
 ![Takeover state](mockups/03-takeover.png)
 
 ![Stopped state](mockups/04-stopped.png)
