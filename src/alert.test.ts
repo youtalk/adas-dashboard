@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { AlertPill, collectAlerts, type ActiveAlert } from "./alert";
+import { withPageFcw } from "./fcw";
 
 // ---------------------------------------------------------------------------
 // Minimal DOM element mock — no jsdom needed for pure state logic.
@@ -153,6 +154,26 @@ describe("AlertPill.tick — critical pulse", () => {
     const opacity1 = parseFloat(el.style.opacity);
     expect(opacity1).toBeGreaterThan(opacity0);
     expect(opacity1).toBeCloseTo(1.0, 1);
+  });
+
+  it("does not pulse an AEB alert", () => {
+    const { pill, el } = makePill();
+    pill.setAlerts([
+      { code: "AEB", severity: "critical", text: "Emergency braking", target: "lead" },
+    ]);
+    pill.tick(0.75); // the pulse is at its lowest here, opacity 0.3
+    expect(el.style.opacity).toBe("1");
+  });
+
+  it("shows the stack AEB over the page FCW", () => {
+    const { pill, textEl } = makePill();
+    pill.setAlerts(
+      withPageFcw(
+        [{ code: "AEB", severity: "critical", text: "Emergency braking", target: "lead" }],
+        true,
+      ),
+    );
+    expect(textEl.textContent).toBe("Emergency braking");
   });
 
   it("warn alert holds opacity at 1.0 (no pulse)", () => {

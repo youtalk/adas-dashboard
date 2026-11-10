@@ -7,6 +7,7 @@
   "camera_url": "data:text/html,<body style='margin:0;overflow:hidden;background:black'><img src='http://127.0.0.1:8080/stream?topic=/carla/hero/main_cam/image&type=mjpeg&quality=80&width=640&height=360' onerror='setTimeout(()=>{this.src=this.src},1000)' style='width:100%25;height:100%25;object-fit:cover'>",
   "units": "mph",
   "theme": "dark",
+  "fcw_ttc_s": 3.0,
   "camera": {
     "chase": { "pitch_deg": 25, "distance_m": 18, "lookahead_m": 12 },
     "high": { "pitch_deg": 50, "distance_m": 60, "lookahead_m": 30 }

@@ -29,6 +29,8 @@
         --center-mark: #4b5661;
         --accel: #22c55e;
         --brake: #ef4444;
+        --ttc-warn: #f59e0b;
+        --ttc-safe: #22c55e;
         --takeover-strong: #c2410c;
         --on-takeover: #ffffff;
         --takeover-text: #fdba74;
@@ -59,6 +61,8 @@
         --center-mark: #94a3b8;
         --accel: #16a34a;
         --brake: #dc2626;
+        --ttc-warn: #d97706;
+        --ttc-safe: #16a34a;
         --takeover-strong: #c2410c;
         --on-takeover: #ffffff;
         --takeover-text: #c2410c;
@@ -145,14 +149,24 @@
       /* ------------------------------------------------------------------ */
       /* Alert pill — top center (design §6.2)                               */
       /* ------------------------------------------------------------------ */
-      /* A long text wraps to more lines. The width keeps the pill clear of the
-         camera PiP (16 + 230 + 16 px on each side), but never under 30 percent
-         of the page. */
-      #alert-pill {
+      /* The pill and the TTC bar under it, in one column. */
+      #top-center {
         position: fixed;
         top: calc(16 * var(--u));
         left: 50%;
         transform: translateX(-50%);
+        width: max-content;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: calc(10 * var(--u));
+        z-index: 20;
+        pointer-events: none;
+      }
+      /* A long text wraps to more lines. The width keeps the pill clear of the
+         camera PiP (16 + 230 + 16 px on each side), but never under 30 percent
+         of the page. */
+      #alert-pill {
         width: max-content;
         max-width: max(30vw, calc(100vw - 2 * 262 * var(--u)));
         box-sizing: border-box;
@@ -160,8 +174,6 @@
         border-radius: calc(22 * var(--u));
         text-align: center;
         line-height: 1.25;
-        z-index: 20;
-        pointer-events: none;
       }
       #alert-pill-text {
         font-size: calc(20 * var(--u)); /* design §6.5: at least 20 px at 1080p */
@@ -186,6 +198,50 @@
         background: var(--takeover-strong);
         border: 1px solid var(--takeover-strong);
         color: var(--on-takeover);
+      }
+      /* TTC bar (design section 6.3): 0 to 4 s, amber below the warning
+         threshold, green above it, red during AEB. main.ts sets --warn-frac
+         and --mark-frac. */
+      #ttc-bar {
+        position: relative;
+        width: calc(360 * var(--u));
+        margin-bottom: calc(22 * var(--u)); /* room for the label */
+      }
+      .ttc-track {
+        height: calc(8 * var(--u));
+        border-radius: calc(4 * var(--u));
+        background: linear-gradient(
+          90deg,
+          var(--ttc-warn) calc(var(--warn-frac) * 100%),
+          var(--ttc-safe) calc(var(--warn-frac) * 100%)
+        );
+      }
+      #ttc-bar[data-aeb="true"] .ttc-track {
+        background: var(--alert);
+      }
+      .ttc-mark {
+        position: absolute;
+        left: calc(var(--mark-frac) * 100%);
+        top: calc(-4 * var(--u));
+        width: calc(3 * var(--u));
+        height: calc(16 * var(--u));
+        transform: translateX(-50%);
+        background: var(--fg-strong);
+        box-shadow: 0 0 calc(2 * var(--u)) var(--label-shadow);
+      }
+      .ttc-label {
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        margin-top: calc(2 * var(--u));
+        font-size: calc(14 * var(--u));
+        font-weight: 700;
+        white-space: nowrap;
+        color: var(--fg-strong);
+        text-shadow:
+          0 0 4px var(--label-shadow),
+          0 1px 2px var(--label-shadow);
       }
 
       /* ------------------------------------------------------------------ */
@@ -479,9 +535,15 @@
     </button>
 
     <!-- Alert pill — top center -->
-    <div id="alert-pill" hidden>
-      <span id="alert-pill-text"></span>
-      <span id="alert-pill-code"></span>
+    <div id="top-center">
+      <div id="alert-pill" hidden>
+        <span id="alert-pill-text"></span>
+        <span id="alert-pill-code"></span>
+      </div>
+      <div id="ttc-bar" hidden>
+        <div class="ttc-track"></div>
+        <div class="ttc-mark"><span class="ttc-label"></span></div>
+      </div>
     </div>
 
     <!-- Bottom-left column: HUD panel above, connection status below -->
