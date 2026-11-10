@@ -4,7 +4,7 @@ import { Fcw, FCW_ALERT, FCW_DEFAULT_TTC_S, leadDistance, nextWarn, withPageFcw 
 // One sample every 100 ms, like VisionPilot at 10 Hz.
 const feed = (f: Fcw, ds: (number | null)[], ego: number, t0 = 1000) =>
   ds.map((d, i) => f.update(t0 + i * 100, d, ego));
-const n = (k: number, g: (i: number) => number) => Array.from({ length: k }, (_, i) => g(i));
+const n = <T>(k: number, g: (i: number) => T) => Array.from({ length: k }, (_, i) => g(i));
 
 describe("Fcw", () => {
   it("measures the closing speed from the distance change", () => {
