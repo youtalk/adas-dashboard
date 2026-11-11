@@ -46,11 +46,11 @@ async def run(args: argparse.Namespace) -> None:
         cmd = last[0]
         auth = supervisor.authority(cmd[0] if cmd else None, time.monotonic())
         msgs = supervisor.messages(
-            now_ms(), auth, prev, tick, cmd[1:] if cmd else None, args.stack_name
+            now_ms(), auth, prev, tick, cmd[1:] if cmd else None, args.stack_name, args.device
         )
         return auth, msgs
 
-    endpoint = ws.Endpoint(supervisor.hello(now_ms()), lambda: step(None, 0)[1])
+    endpoint = ws.Endpoint(supervisor.hello(now_ms(), args.device), lambda: step(None, 0)[1])
     await endpoint.start(args.host, args.port)
     print(f"supervisor endpoint on ws://{args.host}:{args.port}, topic {TOPIC}", flush=True)
     prev, tick = None, 0
@@ -65,6 +65,9 @@ async def run(args: argparse.Namespace) -> None:
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--stack-name", default="Stack", help="the name in the takeover alert text")
+    ap.add_argument(
+        "--device", default=supervisor.DEVICE, help="the Safety Island core on the page"
+    )
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8092)
     asyncio.run(run(ap.parse_args()))
